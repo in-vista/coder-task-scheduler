@@ -1,4 +1,5 @@
 ﻿using System.Xml.Serialization;
+using MySqlConnector;
 using WiserTaskScheduler.Core.Models;
 
 namespace WiserTaskScheduler.Modules.Branches.Models
@@ -38,7 +39,16 @@ namespace WiserTaskScheduler.Modules.Branches.Models
         /// This is for sending notifications about the status of the deletion of a branch.
         /// </summary>
         public ulong DeletedBranchTemplateId { get; set; }
-        
+
+        /// <summary>
+        /// Gets or sets whether to use the <see cref="MySqlBulkCopy"/> class when creating branches.
+        /// This is only applicable if the server of the branch database is different from the main database server.
+        /// This is NOT used by default, because it requires the setting "local_infile" to be enabled in the MySQL server.
+        /// Enabling local_infile can pose security risks if untrusted users have access to your MySQL server, as it allows them to load data from local files on the client machine. Ensure that you understand these risks and mitigate them appropriately.
+        /// However, creating branches with this setting enabled will be much faster than the default method.
+        /// </summary>
+        public bool UseMySqlBulkCopyWhenCreatingBranches { get; set; }
+
         /// <summary>
         /// Gets or sets the specific rules for copying tables.
         /// </summary>

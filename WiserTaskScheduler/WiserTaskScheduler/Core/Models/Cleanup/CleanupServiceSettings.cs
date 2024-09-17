@@ -1,4 +1,4 @@
-﻿using WiserTaskScheduler.Core.Workers;
+using WiserTaskScheduler.Core.Workers;
 using WiserTaskScheduler.Modules.RunSchemes.Enums;
 using WiserTaskScheduler.Modules.RunSchemes.Models;
 
@@ -38,5 +38,16 @@ namespace WiserTaskScheduler.Core.Models.Cleanup
         {
             Type = RunSchemeTypes.Daily
         };
+        
+        /// <summary>
+        /// Gets or sets the number of days wts services need to be kept.
+        /// </summary>
+        public int NumberOfDaysToStoreWtsServices { get; set; } = 30;
+		
+		/// <summary>
+        /// Gets or sets the timeout value of the request
+        /// value is in seconds
+        /// </summary>
+        public int Timeout { get; set; } = 300;
     }
 }

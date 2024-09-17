@@ -15,6 +15,7 @@ using WiserTaskScheduler.Modules.ServerMonitors.Models;
 using WiserTaskScheduler.Modules.WiserImports.Models;
 using WiserTaskScheduler.Modules.Ftps.Models;
 using WiserTaskScheduler.Modules.GenerateCommunications.Models;
+using WiserTaskScheduler.Modules.SlackMessages.Models;
 
 namespace WiserTaskScheduler.Core.Models
 {
@@ -230,6 +231,19 @@ namespace WiserTaskScheduler.Core.Models
         /// </summary>
         [XmlElement("DocumentStoreRead")]
         public DocumentStoreReadModel[] DocumentStoreReader { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the SlackMessages that have been placed in the group.
+        /// </summary>
+        [XmlArray("SlackMessages")]
+        [XmlArrayItem(typeof(SlackMessageModel))]
+        public SlackMessageModel[] SlackMessageGroup { get; set; }
+
+        /// <summary>
+        /// Gets or sets the SlackMessages that have been placed outside the group.
+        /// </summary>
+        [XmlElement("SlackMessage")]
+        public SlackMessageModel[] SlackMessages { get; set; }
 
         /// <summary>
         /// Get all run schemes that are defined in this configuration.

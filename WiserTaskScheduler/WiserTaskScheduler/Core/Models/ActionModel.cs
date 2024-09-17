@@ -52,6 +52,12 @@ namespace WiserTaskScheduler.Core.Models
         /// Result set name and required status (True/False), separated by a comma (,).
         /// </summary>
         public string OnlyWithSuccessState { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the value that will be checked to see if the action is performed
+        /// Result set path and check value, separated by a comma (,).
+        /// </summary>
+        public string OnlyWithValue { get; set; }
 
         /// <summary>
         /// Gets or sets the log settings that apply to the action.
