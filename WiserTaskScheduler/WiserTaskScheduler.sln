@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WiserTaskScheduler", "Wiser
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AutoUpdater", "AutoUpdater\AutoUpdater.csproj", "{EF0799C9-2E89-4AFD-B31D-5F3A245C3244}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeeksCoreLibrary", "C:\invista-core-library\GeeksCoreLibrary\GeeksCoreLibrary.csproj", "{663E0A6F-21FB-49B4-A9FE-EA7C61D82D4D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{EF0799C9-2E89-4AFD-B31D-5F3A245C3244}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{EF0799C9-2E89-4AFD-B31D-5F3A245C3244}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{EF0799C9-2E89-4AFD-B31D-5F3A245C3244}.Release|Any CPU.Build.0 = Release|Any CPU
+		{663E0A6F-21FB-49B4-A9FE-EA7C61D82D4D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{663E0A6F-21FB-49B4-A9FE-EA7C61D82D4D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{663E0A6F-21FB-49B4-A9FE-EA7C61D82D4D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{663E0A6F-21FB-49B4-A9FE-EA7C61D82D4D}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

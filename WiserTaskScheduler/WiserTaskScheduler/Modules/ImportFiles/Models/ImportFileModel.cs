@@ -40,6 +40,11 @@ namespace WiserTaskScheduler.Modules.ImportFiles.Models
         /// The value "\t" can be used for tab-separated files.
         /// </summary>
         public string Separator { get; set; } = ",";
+        
+        /// <summary>
+        /// Gets or sets the escape character used in CSV files
+        /// </summary>
+        public string EscapeCharacter { get; set; } = "";
 
         /// <summary>
         /// Gets or sets if the first row of the file are field names.

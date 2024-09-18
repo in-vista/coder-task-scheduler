@@ -225,8 +225,16 @@ namespace WiserTaskScheduler.Modules.ImportFiles.Services
                         continue;
                     }
 
-                    var columns = new JArray(lines[i].Split(importFile.Separator));
-
+                    JArray columns;
+                    if (!string.IsNullOrEmpty(importFile.EscapeCharacter))
+                    {
+                        columns = new JArray(lines[i].Split(importFile.Separator).Select(column => column.Trim(importFile.EscapeCharacter[0])));
+                    }
+                    else
+                    {
+                        columns = new JArray(lines[i].Split(importFile.Separator));
+                    }
+                    
                     // Use the first row to determine the number of columns to be expected in each row.
                     if (firstColumnLength == -1)
                     {
@@ -253,6 +261,10 @@ namespace WiserTaskScheduler.Modules.ImportFiles.Services
             }
 
             var fieldNames = lines[0].Split(importFile.Separator);
+            if (!string.IsNullOrEmpty(importFile.EscapeCharacter))
+            {
+                fieldNames = (string[])(fieldNames.Select(field => field.Trim(importFile.EscapeCharacter[0])).ToArray());
+            }
 
             for (var i = 1; i < lines.Length; i++)
             {
@@ -265,6 +277,10 @@ namespace WiserTaskScheduler.Modules.ImportFiles.Services
                 }
 
                 var columns = lines[i].Split(importFile.Separator);
+                if (!string.IsNullOrEmpty(importFile.EscapeCharacter))
+                {
+                    columns = (string[])(columns.Select(column => column.Trim(importFile.EscapeCharacter[0])).ToArray());
+                }
 
                 if (columns.Length != fieldNames.Length)
                 {
