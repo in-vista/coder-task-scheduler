@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Xml;
 using System.Xml.Serialization;
 using WiserTaskScheduler.Core.Enums;
+using WiserTaskScheduler.Modules.HttpApis.Models;
 
 namespace WiserTaskScheduler.Core.Models.OAuth
 {
@@ -83,6 +84,13 @@ namespace WiserTaskScheduler.Core.Models.OAuth
         [XmlArray("FormKeyValues")]
         [XmlArrayItem(typeof(FormKeyValueModel))]
         public FormKeyValueModel[] FormKeyValues { get; set; }
+        
+        /// <summary>
+        /// Gets or sets custom headers to include in the oauth request.
+        /// </summary>
+        [XmlArray("Headers")]
+        [XmlArrayItem(typeof(HeaderModel))]
+        public HeaderModel[] Headers { get; set; }
 
         /// <summary>
         /// Gets or sets the JWT settings for the OAuth payload.
@@ -105,7 +113,6 @@ namespace WiserTaskScheduler.Core.Models.OAuth
         /// <summary>
         /// Gets or sets the refresh token.
         /// </summary>
-        [XmlIgnore]
         public string RefreshToken { get; set; }
 
         /// <summary>

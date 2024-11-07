@@ -64,7 +64,10 @@ namespace WiserTaskScheduler.Core.Services
             {
                 oAuth.AccessToken = (await objectsService.GetSystemObjectValueAsync($"WTS_{oAuth.ApiName}_AccessToken"))?.DecryptWithAes(gclSettings.DefaultEncryptionKey);
                 oAuth.TokenType = await objectsService.GetSystemObjectValueAsync($"WTS_{oAuth.ApiName}_TokenType");
-                oAuth.RefreshToken = (await objectsService.GetSystemObjectValueAsync($"WTS_{oAuth.ApiName}_RefreshToken"))?.DecryptWithAes(gclSettings.DefaultEncryptionKey);
+                if (string.IsNullOrEmpty(oAuth.RefreshToken))
+                {
+                    oAuth.RefreshToken = (await objectsService.GetSystemObjectValueAsync($"WTS_{oAuth.ApiName}_RefreshToken"))?.DecryptWithAes(gclSettings.DefaultEncryptionKey);
+                }
                 var expireTime = await objectsService.GetSystemObjectValueAsync($"WTS_{oAuth.ApiName}_ExpireTime");
 
                 // Try to parse the DateTime. If it fails, then set it to DateTime.MinValue to prevent errors.
@@ -137,7 +140,7 @@ namespace WiserTaskScheduler.Core.Services
 
                                 case OAuthGrantType.PasswordCredentials:
                                     await logService.LogInformation(logger, LogScopes.RunBody, oAuthApi.LogSettings,
-                                        $"Requesting new access token for '{apiName}' using username and password.",
+                                        $"Requesting new access token for '{apiName}' on endpoint '{oAuthApi.Endpoint}' using username and password.",
                                         LogName);
 
                                     formData.Add(new KeyValuePair<string, string>("grant_type", "password"));
@@ -148,7 +151,7 @@ namespace WiserTaskScheduler.Core.Services
 
                                 case OAuthGrantType.ClientCredentials:
                                     await logService.LogInformation(logger, LogScopes.RunBody, oAuthApi.LogSettings,
-                                        $"Requesting new access token for '{apiName}' using client credentials.",
+                                        $"Requesting new access token for '{apiName}' on endpoint '{oAuthApi.Endpoint}' using client credentials.",
                                         LogName);
                                     
                                     formData.Add(new KeyValuePair<string, string>("grant_type", "client_credentials"));
@@ -245,9 +248,20 @@ namespace WiserTaskScheduler.Core.Services
                         Content = new FormUrlEncodedContent(formData)
                     };
                     
+                    //Add custom headers
                     request.Headers.Add("Accept", "application/json");
+                    if (oAuthApi.Headers != null)
+                    {
+                        foreach (var header in oAuthApi.Headers)
+                        {
+                            request.Headers.Add(header.Name, header.Value);
+                        }
+                    }
 
-                    if (!oAuthApi.SendClientCredentialsInBody && oAuthApi.GrantType == OAuthGrantType.ClientCredentials)
+                    if (!request.Headers.Contains("Authorization") && 
+                        ((!string.IsNullOrEmpty(oAuthApi.ClientId) && !string.IsNullOrEmpty(oAuthApi.ClientSecret) && 
+                          (oAuthApi.GrantType == OAuthGrantType.RefreshToken)
+                        || (!oAuthApi.SendClientCredentialsInBody && oAuthApi.GrantType == OAuthGrantType.ClientCredentials))))
                     {
 
                         var authString = $"{oAuthApi.ClientId}:{oAuthApi.ClientSecret}";
@@ -268,6 +282,7 @@ namespace WiserTaskScheduler.Core.Services
                     }
                     else
                     {
+                        await logService.LogInformation(logger, LogScopes.RunBody, oAuthApi.LogSettings, $"Response from oAuth request: '{json}'", LogName);
                         var body = JObject.Parse(json);
 
                         oAuthApi.AccessToken = (string) body["access_token"];
