@@ -52,11 +52,13 @@ namespace WiserTaskScheduler.Modules.ImportFiles.Services
                 return await ImportFileAsync(importFile, ReplacementHelper.EmptyRows, resultSets, configurationServiceName, importFile.UseResultSet);
             }
 
+            //When we want to import multiple files...
             var jArray = new JArray();
 
-            if (String.IsNullOrWhiteSpace(importFile.UseResultSet))
+            if (String.IsNullOrWhiteSpace(importFile.UseResultSet) && !Directory.Exists(importFile.FilePath))
             {
-                await logService.LogError(logger, LogScopes.StartAndStop, importFile.LogSettings, $"The import in configuration '{configurationServiceName}', time ID '{importFile.TimeId}', order '{importFile.Order}' is set to not be a single file but no result set has been provided. If the information is not dynamic set action to single file, otherwise provide a result set to use.", configurationServiceName, importFile.TimeId, importFile.Order);
+                //When there is no resultset with filenames and also the FilePath contains an invalid directory
+                await logService.LogError(logger, LogScopes.StartAndStop, importFile.LogSettings, $"The import in configuration '{configurationServiceName}', time ID '{importFile.TimeId}', order '{importFile.Order}' is set to not be a single file but no result set has been provided AND also no valid directory is given as FilePath. If the information is not dynamic set action to single file, otherwise provide a result set or a directory to use.", configurationServiceName, importFile.TimeId, importFile.Order);
 
                 return new JObject
                 {
@@ -120,14 +122,17 @@ namespace WiserTaskScheduler.Modules.ImportFiles.Services
                     Directory.CreateDirectory(importFile.ProcessedFolder);
                 }
 
-                if (!Directory.Exists(filePath)) // Single file to import
+                // Single file to import
+                if (!Directory.Exists(filePath))
                 {
                     return await ImportSingleFileAsync(importFile, filePath, configurationServiceName);
                 }
 
                 // Directory with files to import
                 var jArray = new JArray();
-                foreach(var file in Directory.GetFiles(filePath, importFile.SearchPattern, SearchOption.TopDirectoryOnly))
+                
+                // Get all files sorted by creation date
+                foreach(var file in Directory.GetFiles(filePath, importFile.SearchPattern, SearchOption.TopDirectoryOnly).OrderBy(file => File.GetCreationTime(file)).ToList())
                 {
                    var result = await ImportSingleFileAsync(importFile, file, configurationServiceName);
                    if (result.ContainsKey("Success") && !(bool) result["Success"]) // Don't add failed imports to the result set.
@@ -266,9 +271,9 @@ namespace WiserTaskScheduler.Modules.ImportFiles.Services
 
                 var columns = lines[i].Split(importFile.Separator);
 
-                if (columns.Length != fieldNames.Length)
+                if (columns.Length < fieldNames.Length)
                 {
-                    await logService.LogWarning(logger, LogScopes.RunBody, importFile.LogSettings, $"Did not import line {i} due to missing columns in file {filePath}", configurationServiceName, importFile.TimeId, importFile.Order);
+                    await logService.LogWarning(logger, LogScopes.RunBody, importFile.LogSettings, $"Did not import line {i} due to missing values in line. File: {filePath}", configurationServiceName, importFile.TimeId, importFile.Order);
                     continue;
                 }
 
