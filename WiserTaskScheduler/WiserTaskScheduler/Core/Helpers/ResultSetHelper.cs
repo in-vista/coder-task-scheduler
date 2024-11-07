@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using WiserTaskScheduler.Core.Models;
 using Newtonsoft.Json.Linq;
 
@@ -40,7 +41,11 @@ namespace WiserTaskScheduler.Core.Helpers
                 {
                     if (!key.EndsWith(']'))
                     {
-                        return usingResultSet[key] as T;
+                        return usingResultSet.Properties()
+                            .FirstOrDefault(p => string.Equals(p.Name, key, StringComparison.OrdinalIgnoreCase))
+                            ?.Value as T;
+                        
+                        //return usingResultSet[key] as T;
                     }
 
                     var arrayKey = key.Substring(0, key.IndexOf('['));
