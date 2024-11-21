@@ -33,7 +33,7 @@ namespace WiserTaskScheduler.Core.Services
         private bool updatedTargetDatabaseList = false;
 
         // Database strings used to target other dbs in the same cluster.
-        private readonly List<ParentUpdateDatabaseStrings> targetDatabases = [];
+        private readonly List<ParentUpdateDatabaseStrings> targetDatabases = new List<ParentUpdateDatabaseStrings>();
 
         private int runCounter = 0;
 

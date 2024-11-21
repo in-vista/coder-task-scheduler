@@ -100,8 +100,9 @@ namespace WiserTaskScheduler.Modules.Queries.Services
             // If not using a result set execute the query as given.
             if (String.IsNullOrWhiteSpace(query.UseResultSet))
             {
-                await logService.LogInformation(logger, LogScopes.RunBody, query.LogSettings, $"Query: {query.Query}", configurationServiceName, query.TimeId, query.Order);
+                await logService.LogInformation(logger, LogScopes.RunBody, query.LogSettings, $"Query (without resultset): {query.Query}", configurationServiceName, query.TimeId, query.Order);
                 var dataTable = await databaseConnection.GetAsync(query.Query);
+                await logService.LogInformation(logger, LogScopes.RunBody, query.LogSettings, $"Query results rows: {dataTable.Rows.Count}", configurationServiceName, query.TimeId, query.Order);
                 return GetResultSetFromDataTable(dataTable);
             }
 
