@@ -682,7 +682,8 @@ public class CommunicationsService : ICommunicationsService, IActionsService, IS
 	communicationtype,
 	send_date,
 	attempt_count,
-	last_attempt
+	last_attempt,
+	provider
 FROM {WiserTableNames.WiserCommunicationGenerated}
 WHERE
 	communicationtype = ?communicationType
@@ -788,7 +789,8 @@ WHERE
 	        Type = Enum.Parse<CommunicationTypes>(row.Field<string>("communicationtype"), true),
 	        SendDate = row.Field<DateTime>("send_date"),
 	        AttemptCount = row.Field<int>("attempt_count"),
-	        LastAttempt = row.Field<DateTime?>("last_attempt")
+	        LastAttempt = row.Field<DateTime?>("last_attempt"),
+	        Provider = row.Field<string>("provider")
         };
 
         return singleCommunication;
