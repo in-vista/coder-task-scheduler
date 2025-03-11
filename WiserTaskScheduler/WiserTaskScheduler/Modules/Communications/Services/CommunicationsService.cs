@@ -522,14 +522,14 @@ public class CommunicationsService : ICommunicationsService, IActionsService, IS
 		    databaseConnection.AddParameter("last_attempt", DateTime.Now);
 		    databaseConnection.AddParameter("processed_date", DateTime.Now);
 		    databaseConnection.AddParameter("status_message", statusMessage);
-		    await databaseConnection.ExecuteAsync($"""
-			                                        UPDATE {WiserTableNames.WiserCommunicationGenerated}
+		    await databaseConnection.ExecuteAsync($@"
+													UPDATE {WiserTableNames.WiserCommunicationGenerated}
 			                                        SET attempt_count=attempt_count+1,
 														last_attempt=?last_attempt,
 			                                            processed_date=?processed_date,
 			                                           	status_message=?status_message
 			                                        WHERE id IN ({string.Join(",", ids)});
-		                                           """);
+		                                           ");
 		    
 	    }
 	    catch (Exception e)
@@ -537,13 +537,13 @@ public class CommunicationsService : ICommunicationsService, IActionsService, IS
 		    databaseConnection.ClearParameters();
 		    databaseConnection.AddParameter("last_attempt", DateTime.Now);
 		    databaseConnection.AddParameter("status_message", statusMessage);
-		    await databaseConnection.ExecuteAsync($"""
+		    await databaseConnection.ExecuteAsync($@"
 			                                        UPDATE {WiserTableNames.WiserCommunicationGenerated}
 			                                        SET attempt_count=attempt_count+1,
 			                                            last_attempt=?last_attempt,
 			                                           	status_message=?status_message
 			                                        WHERE id IN ({string.Join(",", ids)});
-		                                           """);
+		                                           ");
 		    await SendErrorNotification(communication, databaseConnection, firstEmail, statusMessage);
 	    }
     }
