@@ -5,12 +5,14 @@ using System.Globalization;
 using System.Linq;
 using System.Net.Mail;
 using System.Threading.Tasks;
+using DocumentFormat.OpenXml.Wordprocessing;
 using GeeksCoreLibrary.Core.DependencyInjection.Interfaces;
 using GeeksCoreLibrary.Core.Extensions;
 using GeeksCoreLibrary.Core.Models;
 using GeeksCoreLibrary.Modules.Communication.Enums;
 using GeeksCoreLibrary.Modules.Communication.Extensions;
 using GeeksCoreLibrary.Modules.Communication.Models;
+using GeeksCoreLibrary.Modules.Communication.Models.MailerSend;
 using GeeksCoreLibrary.Modules.Databases.Interfaces;
 using GeeksCoreLibrary.Modules.DataSelector.Interfaces;
 using GeeksCoreLibrary.Modules.GclReplacements.Interfaces;
@@ -20,6 +22,7 @@ using Newtonsoft.Json.Linq;
 using IGclCommunicationsService = GeeksCoreLibrary.Modules.Communication.Interfaces.ICommunicationsService;
 using GeeksCoreLibrary.Modules.DataSelector.Models;
 using Newtonsoft.Json;
+using Org.BouncyCastle.Pqc.Crypto.NtruPrime;
 using WiserTaskScheduler.Core.Enums;
 using WiserTaskScheduler.Core.Interfaces;
 using WiserTaskScheduler.Core.Models;
@@ -73,7 +76,15 @@ public class CommunicationsService : ICommunicationsService, IActionsService, IS
 	    switch (communication.Type)
 	    {
 	        case CommunicationTypes.Email:
-	            return await ProcessMailsAsync(communication, databaseConnection, gclCommunicationsService, configurationServiceName);
+		        if (communication.BulkSend && communication.SmtpSettings.Provider == EmailServiceProviders.MailerSendRestApi)
+		        {
+			        // Only bulk send if provider is MailerSend. Other providers don't support bulk sending.
+			        return await ProcessBulkMailsAsync(communication, databaseConnection, gclCommunicationsService, configurationServiceName);
+		        }
+		        else
+		        {
+			        return await ProcessMailsAsync(communication, databaseConnection, gclCommunicationsService, configurationServiceName);    
+		        }
 	        case CommunicationTypes.Sms:
 		        return await ProcessSmsAsync(communication, databaseConnection, gclCommunicationsService, configurationServiceName);
 	        case CommunicationTypes.WhatsApp:
@@ -346,6 +357,7 @@ public class CommunicationsService : ICommunicationsService, IActionsService, IS
 		    {
 			    email.AttemptCount++;
 			    await gclCommunicationsService.SendEmailDirectlyAsync(email, communication.SmtpSettings);
+				    
 			    processed++;
 			    databaseConnection.ClearParameters();
 			    databaseConnection.AddParameter("processed_date", DateTime.Now);
@@ -391,6 +403,7 @@ public class CommunicationsService : ICommunicationsService, IActionsService, IS
 			    await logService.LogError(logger, LogScopes.RunBody, communication.LogSettings, $"Failed to send email for communication ID {email.Id} due to general error:\n{e}", configurationServiceName, communication.TimeId, communication.Order);
 		    }
 		    
+		    databaseConnection.AddParameter("last_attempt", DateTime.Now);
 		    databaseConnection.AddParameter("attempt_count", email.AttemptCount);
 			databaseConnection.AddParameter("status_code", statusCode);
 			databaseConnection.AddParameter("status_message", statusMessage);
@@ -409,6 +422,130 @@ public class CommunicationsService : ICommunicationsService, IActionsService, IS
 		    {"Failed", failed},
 		    {"Total", processed + failed}
 	    };
+    }
+    
+    /// <summary>
+    /// Process the bulk emails that need to be send.
+    /// </summary>
+    /// <param name="communication">The communication information.</param>
+    /// <param name="databaseConnection">The database connection to use.</param>
+    /// <param name="gclCommunicationsService">The communications service from the GCL to actually send out the emails.</param>
+    /// <param name="configurationServiceName">The name of the configuration that is being executed.</param>
+    /// <returns></returns>
+    private async Task<JObject> ProcessBulkMailsAsync(CommunicationModel communication, IDatabaseConnection databaseConnection, IGclCommunicationsService gclCommunicationsService, string configurationServiceName)
+    {
+	    var emails = await GetCommunicationsOfTypeAsync(communication, databaseConnection, configurationServiceName);
+
+	    if (!emails.Any())
+	    {
+		    await logService.LogInformation(logger, LogScopes.RunStartAndStop, communication.LogSettings, "No emails found to be send.", configurationServiceName, communication.TimeId, communication.Order);
+		    return new JObject()
+		    {
+			    {"Type", "Email"},
+			    {"Processed", 0},
+			    {"Failed", 0},
+			    {"Total", 0}
+		    };
+	    }
+
+	    var processed = 0;
+	    var failed = 0;
+	    var count = 0;
+	    var ids = new List<int>();
+	    var requestBody = new List<MailerSendRequestModel>();
+	    
+	    // Build bulk email request body
+	    foreach (var email in emails)
+	    {
+		    if (ShouldDelay(email) || email.AttemptCount >= communication.MaxNumberOfCommunicationAttempts)
+		    {
+			    continue;
+		    }
+		    
+		    ids.Add(email.Id);
+		    
+		    try
+		    { 
+			    email.AttemptCount++;
+			    requestBody.Add(await gclCommunicationsService.MakeMailerSendRequestBySingleCommunicationAsync(email, communication.SmtpSettings));
+			    count++;
+			    processed++;
+
+			    if (count == 500) // Max is 500 in one bulk call
+			    {
+				    await SendBulkEmailAsync(requestBody, ids, emails.FirstOrDefault(), communication, databaseConnection, gclCommunicationsService);    
+				    count = 0;
+				    ids = [];
+				    requestBody = [];
+			    }
+		    }
+		    catch (Exception e)
+		    {
+			    failed++;
+			    await logService.LogError(logger, LogScopes.RunBody, communication.LogSettings, $"Failed to send email as part of bulk due to general error. ID: {email.Id}:\n{e}", configurationServiceName, communication.TimeId, communication.Order);
+			    
+			    databaseConnection.ClearParameters();
+			    databaseConnection.AddParameter("last_attempt", DateTime.Now);
+			    databaseConnection.AddParameter("attempt_count", email.AttemptCount);
+			    databaseConnection.AddParameter("status_code", "General exception");
+			    databaseConnection.AddParameter("status_message", $"Attempt #{email.AttemptCount}:{Environment.NewLine}{e}");
+			    await databaseConnection.InsertOrUpdateRecordBasedOnParametersAsync(WiserTableNames.WiserCommunicationGenerated, email.Id);
+		    }
+	    }
+	    
+	    await SendBulkEmailAsync(requestBody,ids, emails.FirstOrDefault(), communication, databaseConnection, gclCommunicationsService);
+	    
+	    return new JObject()
+	    {
+		    {"Type", "Email"},
+		    {"Processed", processed},
+		    {"Failed", failed},
+		    {"Total", processed + failed}
+	    };
+    }
+
+    private async Task SendBulkEmailAsync(List<MailerSendRequestModel> requestBody, List<int> ids, SingleCommunicationModel firstEmail, CommunicationModel communication, IDatabaseConnection databaseConnection, IGclCommunicationsService gclCommunicationsService)
+    {
+	    if (requestBody.Count == 0)
+	    {
+		    return;
+	    }
+	    
+	    var statusMessage = "";
+	    
+	    // Send bulk email
+	    try
+	    {
+		    statusMessage = await gclCommunicationsService.SendRequestToMailerSendApiAsync(requestBody, communication.SmtpSettings);
+
+		    databaseConnection.ClearParameters();
+		    databaseConnection.AddParameter("last_attempt", DateTime.Now);
+		    databaseConnection.AddParameter("processed_date", DateTime.Now);
+		    databaseConnection.AddParameter("status_message", statusMessage);
+		    await databaseConnection.ExecuteAsync($@"
+													UPDATE {WiserTableNames.WiserCommunicationGenerated}
+			                                        SET attempt_count=attempt_count+1,
+														last_attempt=?last_attempt,
+			                                            processed_date=?processed_date,
+			                                           	status_message=?status_message
+			                                        WHERE id IN ({string.Join(",", ids)});
+		                                           ");
+		    
+	    }
+	    catch (Exception e)
+	    {
+		    databaseConnection.ClearParameters();
+		    databaseConnection.AddParameter("last_attempt", DateTime.Now);
+		    databaseConnection.AddParameter("status_message", statusMessage);
+		    await databaseConnection.ExecuteAsync($@"
+			                                        UPDATE {WiserTableNames.WiserCommunicationGenerated}
+			                                        SET attempt_count=attempt_count+1,
+			                                            last_attempt=?last_attempt,
+			                                           	status_message=?status_message
+			                                        WHERE id IN ({string.Join(",", ids)});
+		                                           ");
+		    await SendErrorNotification(communication, databaseConnection, firstEmail, statusMessage);
+	    }
     }
 
     private async Task<JObject> ProcessSmsAsync(CommunicationModel communication, IDatabaseConnection databaseConnection, IGclCommunicationsService gclCommunicationsService, string configurationServiceName)
@@ -548,6 +685,7 @@ public class CommunicationsService : ICommunicationsService, IActionsService, IS
         databaseConnection.AddParameter("communicationType", communication.Type.ToString());
         databaseConnection.AddParameter("now", DateTime.Now);
         databaseConnection.AddParameter("maxDelayInHours", communication.MaxDelayInHours);
+        databaseConnection.AddParameter("sendAsBulk", communication.BulkSend);
         databaseConnection.AddParameter("maxNumberOfCommunicationAttempts", communication.MaxNumberOfCommunicationAttempts);
 	    
         var dataTable = await databaseConnection.GetAsync($@"SELECT
@@ -570,14 +708,18 @@ public class CommunicationsService : ICommunicationsService, IActionsService, IS
 	communicationtype,
 	send_date,
 	attempt_count,
-	last_attempt
+	last_attempt,
+	provider,
+	tags
 FROM {WiserTableNames.WiserCommunicationGenerated}
 WHERE
 	communicationtype = ?communicationType
 	AND send_date <= ?now
-	AND IF(?maxDelayInHours > 0, DATE_ADD(send_date, INTERVAL ?maxDelayInHours HOUR), '2199-01-01 00:00:00') >= ?now
+	{(communication.MaxDelayInHours > 0 ? "DATE_ADD(send_date, INTERVAL ?maxDelayInHours HOUR) >= ?now" : "")}	
 	AND processed_date IS NULL
-	AND attempt_count < ?maxNumberOfCommunicationAttempts");
+	AND IFNULL(max_send_date,'') <= ?now	
+	AND attempt_count < ?maxNumberOfCommunicationAttempts
+	AND send_as_bulk = ?sendAsBulk");
 
         var communications = new List<SingleCommunicationModel>();
         
@@ -654,6 +796,12 @@ WHERE
 	        wiserItemFiles.AddRange(rawWiserItemFiles.Split(new[] {',', ';'}, StringSplitOptions.RemoveEmptyEntries).Select(UInt64.Parse).ToList());
         }
 
+        List<string> tags = null;
+        if (!String.IsNullOrWhiteSpace(row.Field<string>("tags")))
+        {
+	        tags = [..row.Field<string>("tags").Split(',')];
+        }
+
         var singleCommunication = new SingleCommunicationModel()
         {
 	        Id = Convert.ToInt32(row["id"]),
@@ -674,7 +822,9 @@ WHERE
 	        Type = Enum.Parse<CommunicationTypes>(row.Field<string>("communicationtype"), true),
 	        SendDate = row.Field<DateTime>("send_date"),
 	        AttemptCount = row.Field<int>("attempt_count"),
-	        LastAttempt = row.Field<DateTime?>("last_attempt")
+	        LastAttempt = row.Field<DateTime?>("last_attempt"),
+	        Provider = row.Field<string>("provider"),
+	        Tags = tags
         };
 
         return singleCommunication;

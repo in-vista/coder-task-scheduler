@@ -13,6 +13,11 @@ public class CommunicationModel : ActionModel
     /// Gets or sets the type of communication to process.
     /// </summary>
     public CommunicationTypes Type { get; set; } = CommunicationTypes.Email;
+    
+    /// <summary>
+    /// Gets or sets if the direct or bulk communication must be processed
+    /// </summary>
+    public bool BulkSend { get; set; } = false;
 
     /// <summary>
     /// Gets or sets the email address that needs to be used if errors occured.
