@@ -85,7 +85,7 @@ namespace WiserTaskScheduler.Core.Services
         }
 
         /// <inheritdoc />
-        public async Task<string> GetAccessTokenAsync(string apiName, bool retryAfterWrongRefreshToken = true)
+        public async Task<OAuthModel> GetAccessTokenAsync(string apiName, bool retryAfterWrongRefreshToken = true)
         {
             var oAuthApi = configuration.OAuths.SingleOrDefault(oAuth => oAuth.ApiName.Equals(apiName));
 
@@ -331,12 +331,12 @@ namespace WiserTaskScheduler.Core.Services
 
             if (result == OAuthState.CurrentToken)
             {
-                return $"{oAuthApi.TokenType} {oAuthApi.AccessToken}";
+                return oAuthApi;
             }
 
             await SaveToDatabaseAsync(oAuthApi);
 
-            return $"{oAuthApi.TokenType} {oAuthApi.AccessToken}";
+            return oAuthApi;
         }
 
         /// <inheritdoc />
