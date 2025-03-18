@@ -715,9 +715,9 @@ FROM {WiserTableNames.WiserCommunicationGenerated}
 WHERE
 	communicationtype = ?communicationType
 	AND send_date <= ?now
-	{(communication.MaxDelayInHours > 0 ? "DATE_ADD(send_date, INTERVAL ?maxDelayInHours HOUR) >= ?now" : "")}	
+	{(communication.MaxDelayInHours > 0 ? "AND DATE_ADD(send_date, INTERVAL ?maxDelayInHours HOUR) >= ?now" : "")}	
 	AND processed_date IS NULL
-	AND IFNULL(max_send_date,'') <= ?now	
+	AND IFNULL(max_send_date,'2099-12-31') >= ?now	
 	AND attempt_count < ?maxNumberOfCommunicationAttempts
 	AND send_as_bulk = ?sendAsBulk");
 
