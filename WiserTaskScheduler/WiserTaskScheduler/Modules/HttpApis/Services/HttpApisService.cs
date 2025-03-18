@@ -13,6 +13,7 @@ using WiserTaskScheduler.Core.Enums;
 using WiserTaskScheduler.Core.Helpers;
 using WiserTaskScheduler.Core.Interfaces;
 using WiserTaskScheduler.Core.Models;
+using WiserTaskScheduler.Core.Models.OAuth;
 using WiserTaskScheduler.Modules.Body.Interfaces;
 using WiserTaskScheduler.Modules.HttpApis.Interfaces;
 using WiserTaskScheduler.Modules.HttpApis.Models;
@@ -145,7 +146,7 @@ namespace WiserTaskScheduler.Modules.HttpApis.Services
                 url = ReplacementHelper.ReplaceText(url, rows, parameterKeys, usingResultSet, httpApi.HashSettings, htmlEncode: true);
             }
 
-            await logService.LogInformation(logger, LogScopes.RunBody, httpApi.LogSettings, $"Url: {url}, method: {httpApi.Method}", configurationServiceName, httpApi.TimeId, httpApi.Order, extraValuesToObfuscate);
+            await logService.LogInformation(logger, LogScopes.RunBody, httpApi.LogSettings, $"URL to call for this service = {url}, method: {httpApi.Method}", configurationServiceName, httpApi.TimeId, httpApi.Order, extraValuesToObfuscate);
             var request = new HttpRequestMessage(new HttpMethod(httpApi.Method), url);
 
             foreach (var header in httpApi.Headers)
@@ -166,12 +167,13 @@ namespace WiserTaskScheduler.Modules.HttpApis.Services
                 }
             }
 
+            OAuthModel token = null;
             if (!String.IsNullOrWhiteSpace(httpApi.OAuth))
             {
-                var token = await oAuthService.GetAccessTokenAsync(httpApi.OAuth);
+                token = await oAuthService.GetAccessTokenAsync(httpApi.OAuth);
                 if (token != null)
                 {
-                    request.Headers.Add("Authorization", token);
+                    request.Headers.Add("Authorization", $"{token.TokenType} {token.AccessToken}"); //bijvoorbeeld: Bearer <accesstoken>
                 }
                 else
                 {
@@ -201,7 +203,7 @@ namespace WiserTaskScheduler.Modules.HttpApis.Services
 
             if (httpApi.Body != null)
             {
-                var body = bodyService.GenerateBody(httpApi.Body, rows, resultSets, httpApi.HashSettings, forcedIndex);
+                var body = bodyService.GenerateBody(httpApi.Body, rows, resultSets, httpApi.HashSettings, forcedIndex, token);
 
                 await logService.LogInformation(logger, LogScopes.RunBody, httpApi.LogSettings, $"Body:\n{body}", configurationServiceName, httpApi.TimeId, httpApi.Order, extraValuesToObfuscate);
                 request.Content = new StringContent(body)
