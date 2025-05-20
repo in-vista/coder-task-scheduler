@@ -22,6 +22,11 @@ namespace WiserTaskScheduler.Modules.Queries.Models
         public int Timeout { get; set; } = 30;
 
         /// <summary>
+        /// Only execute this query when the used resultset has a succes state of true
+        /// </summary>
+        public bool OnlyWithSuccessfullResultSet { get; set; } = false;
+
+        /// <summary>
         /// Gets or sets the information for character encoding to use.
         /// </summary>
         public CharacterEncodingModel CharacterEncoding { get; set; } = new CharacterEncodingModel();

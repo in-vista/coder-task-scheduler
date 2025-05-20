@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
+using DocumentFormat.OpenXml.Drawing.Diagrams;
 using GeeksCoreLibrary.Core.DependencyInjection.Interfaces;
 using GeeksCoreLibrary.Core.Helpers;
 using GeeksCoreLibrary.Modules.Databases.Interfaces;
@@ -131,10 +132,18 @@ namespace WiserTaskScheduler.Modules.Queries.Services
 
             // Perform the query for each row in the result set that is being used.
             var usingResultSet = ResultSetHelper.GetCorrectObject<JArray>(query.UseResultSet, ReplacementHelper.EmptyRows, resultSets);
+            
             var rows = new List<int> {0, 0};
             var keyWithSecondLayer = parameterKeys.FirstOrDefault(parameterKey => parameterKey.Key.Contains("[j]"))?.Key;
             for (var i = 0; i < usingResultSet.Count; i++)
             {
+                // If the resulset has a succes of 'false' then don't proceed
+                if (query.OnlyWithSuccessfullResultSet && Convert.ToBoolean(usingResultSet[i]["Success"] ?? true)==false)
+                {
+                    await logService.LogInformation(logger, LogScopes.RunBody, query.LogSettings, $"Execution of Query skipped because Resulset has a Success=false", configurationServiceName, query.TimeId, query.Order);
+                    continue;
+                }
+                
                 rows[0] = i;
                 var lastIQuery = i == usingResultSet.Count - 1;
 
