@@ -272,6 +272,7 @@ namespace WiserTaskScheduler.Modules.ImportFiles.Services
                 fieldNames = (string[])(fieldNames.Select(field => field.Trim(importFile.EscapeCharacter[0])).ToArray());
             }
 
+            //Read all lines
             for (var i = 1; i < lines.Length; i++)
             {
                 var row = new JObject();
@@ -282,10 +283,39 @@ namespace WiserTaskScheduler.Modules.ImportFiles.Services
                     continue;
                 }
 
-                var columns = lines[i].Split(importFile.Separator);
+                string[] columns;
+                //Get values
                 if (!string.IsNullOrEmpty(importFile.EscapeCharacter))
                 {
-                    columns = (string[])(columns.Select(column => column.Trim(importFile.EscapeCharacter[0])).ToArray());
+                    var line = lines[i];
+                    var values = new List<string>();
+                    while (line.Length > 0)
+                    {
+                        string value = null;
+                        //If an escape character is given, then we need to handle this, so don't split on separator, but go to next escape character
+                        var index =  line.StartsWith(importFile.EscapeCharacter, StringComparison.Ordinal) ? 
+                            line.TrimStart(importFile.EscapeCharacter[0]).IndexOf(importFile.EscapeCharacter, StringComparison.Ordinal)+2 : 
+                            line.IndexOf(importFile.Separator, StringComparison.Ordinal);
+                        value = index >= 0 ? line.Substring(0, index) : line;
+                        values.Add(value.Trim(importFile.EscapeCharacter[0]));
+                        if (line.Length <= value.Length + importFile.Separator.Length)
+                        {
+                            if (line.EndsWith(importFile.Separator))
+                                values.Add("");
+                            line = "";
+                        }
+                        else
+                            line = line.Substring(value.Length + importFile.Separator.Length);
+                    }
+                    columns = values.ToArray();
+                }
+                else
+                {
+                    columns = lines[i].Split(importFile.Separator);
+                    if (!string.IsNullOrEmpty(importFile.EscapeCharacter))
+                    {
+                        columns = (string[])(columns.Select(column => column.Trim(importFile.EscapeCharacter[0])).ToArray());
+                    }
                 }
 
                 if (columns.Length < fieldNames.Length)
