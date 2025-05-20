@@ -107,7 +107,7 @@ namespace WiserTaskScheduler.Modules.ImportFiles.Services
 
             if (!File.Exists(filePath) && !Directory.Exists(filePath))
             {
-                await logService.LogError(logger, LogScopes.RunStartAndStop, importFile.LogSettings, $"Failed to import file or directory '{importFile.FilePath}'. Path does not exists.", configurationServiceName, importFile.TimeId, importFile.Order);
+                await logService.LogError(logger, LogScopes.RunStartAndStop, importFile.LogSettings, $"Failed to import file or directory '{filePath} ({importFile.FilePath})'. Path does not exists.", configurationServiceName, importFile.TimeId, importFile.Order);
 
                 return new JObject
                 {
@@ -261,6 +261,7 @@ namespace WiserTaskScheduler.Modules.ImportFiles.Services
                 return new JObject
                 {
                     {"Success", true},
+                    {"FilePath",filePath},
                     {"Results", jArray}
                 };
             }
@@ -310,6 +311,7 @@ namespace WiserTaskScheduler.Modules.ImportFiles.Services
             return new JObject
             {
                 {"Success", true},
+                {"FilePath",filePath},
                 {"Fields",  fieldArray},
                 {"Results", jArray}
             };
@@ -345,6 +347,7 @@ namespace WiserTaskScheduler.Modules.ImportFiles.Services
                     return new JObject
                     {
                         {"Success", true},
+                        {"FilePath",filePath},
                         {"Results", result}
                     };
                 }
@@ -375,6 +378,7 @@ namespace WiserTaskScheduler.Modules.ImportFiles.Services
             return new JObject
             {
                 {"Success", true},
+                {"FilePath",filePath},
                 {"Results", result}
             };
         }
