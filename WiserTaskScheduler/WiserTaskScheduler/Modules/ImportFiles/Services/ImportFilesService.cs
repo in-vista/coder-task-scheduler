@@ -292,9 +292,10 @@ namespace WiserTaskScheduler.Modules.ImportFiles.Services
                     while (line.Length > 0)
                     {
                         string value = null;
+                        string doubleescapecharacters = importFile.EscapeCharacter + importFile.EscapeCharacter;
                         //If an escape character is given, then we need to handle this, so don't split on separator, but go to next escape character
                         var index =  line.StartsWith(importFile.EscapeCharacter, StringComparison.Ordinal) ? 
-                            line.TrimStart(importFile.EscapeCharacter[0]).IndexOf(importFile.EscapeCharacter, StringComparison.Ordinal)+2 : 
+                            line.Replace(doubleescapecharacters,"~~").TrimStart(importFile.EscapeCharacter[0]).IndexOf(importFile.EscapeCharacter, StringComparison.Ordinal)+2 : 
                             line.IndexOf(importFile.Separator, StringComparison.Ordinal);
                         value = index >= 0 ? line.Substring(0, index) : line;
                         values.Add(value.Trim(importFile.EscapeCharacter[0]));
