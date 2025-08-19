@@ -596,6 +596,7 @@ public class CommunicationsService : ICommunicationsService, IActionsService, IS
 			    sms.AttemptCount = communication.MaxNumberOfCommunicationAttempts;
 		    }
 
+		    databaseConnection.AddParameter("last_attempt", DateTime.Now);
 		    databaseConnection.AddParameter("attempt_count", sms.AttemptCount);
 		    databaseConnection.AddParameter("status_code", statusCode);
 		    databaseConnection.AddParameter("status_message", statusMessage);
@@ -658,6 +659,7 @@ public class CommunicationsService : ICommunicationsService, IActionsService, IS
                 whatsApp.AttemptCount = communication.MaxNumberOfCommunicationAttempts;
             }
 
+            databaseConnection.AddParameter("last_attempt", DateTime.Now);
             databaseConnection.AddParameter("attempt_count", whatsApp.AttemptCount);
             databaseConnection.AddParameter("status_code", statusCode);
             databaseConnection.AddParameter("status_message", statusMessage);
