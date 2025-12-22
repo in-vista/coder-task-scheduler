@@ -4,6 +4,7 @@ using System.Data;
 using System.Globalization;
 using System.Linq;
 using System.Net.Mail;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using DocumentFormat.OpenXml.Wordprocessing;
 using GeeksCoreLibrary.Core.DependencyInjection.Interfaces;
@@ -926,7 +927,11 @@ WHERE
     {
 	    try
 	    {
-		    return new MailAddress(emailAddress).Address == emailAddress;
+		    if (string.IsNullOrWhiteSpace(emailAddress)) return false;
+		    
+		    // Regex for checking a valid email: 1@2.3 (minimum of one character per part 1, 2, 3)
+		    var pattern = @"^[^@\s]+@[^@\s]+\.[^@\s]+$";
+		    return Regex.IsMatch(emailAddress, pattern);
 	    }
 	    catch
 	    {
