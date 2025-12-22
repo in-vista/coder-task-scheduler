@@ -931,7 +931,7 @@ WHERE
 		    
 		    // Regex for checking a valid email: 1@2.3 (minimum of one character per part 1, 2, 3)
 		    var pattern = @"^[^@\s]+@[^@\s]+\.[^@\s]+$";
-		    return Regex.IsMatch(emailAddress, pattern);
+		    return Regex.IsMatch(emailAddress.Trim(), pattern);
 	    }
 	    catch
 	    {
