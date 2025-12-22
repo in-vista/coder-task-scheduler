@@ -50,6 +50,8 @@ namespace WiserTaskScheduler.Core.Services
             await CleanupDatabaseLogsAsync(databaseConnection, databaseHelpersService);
             await CleanupDatabaseRenderTimesAsync(databaseConnection, databaseHelpersService);
             await CleanupWtsServicesAsync(databaseConnection, databaseHelpersService);
+            await CleanupWiserGrantStore(databaseConnection, databaseHelpersService);
+            await CleanupWiserUserAuthToken(databaseConnection, databaseHelpersService);
         }
 
         /// <summary>
@@ -171,6 +173,62 @@ namespace WiserTaskScheduler.Core.Services
             if (cleanupServiceSettings.OptimizeLogsTableAfterCleanup)
             {
                 await databaseHelpersService.OptimizeTablesAsync(WiserTableNames.WtsServices);
+            }
+        }
+        
+        /// <summary>
+        /// Cleanup wiser_grant_store in the database where expiration is older than the set number of days.
+        /// </summary>
+        /// <param name="databaseConnection">The database connection to use.</param>
+        /// <param name="databaseHelpersService">The <see cref="IDatabaseHelpersService"/> to use.</param>
+        private async Task CleanupWiserGrantStore(IDatabaseConnection databaseConnection, IDatabaseHelpersService databaseHelpersService)
+        {
+            try
+            {
+                databaseConnection.SetCommandTimeout(cleanupServiceSettings.Timeout);
+                databaseConnection.AddParameter("cleanupDate", DateTime.Now.AddDays(-cleanupServiceSettings.NumberOfDaysToStoreWiserGrantStore));
+                
+                var query = $"DELETE FROM {WiserTableNames.WiserGrantStore} WHERE expiration < ?cleanupDate";
+                var rowsDeleted = await databaseConnection.ExecuteAsync(query, cleanUp: true);
+                
+                await logService.LogInformation(logger, LogScopes.RunStartAndStop, LogSettings, $"Cleaned up {rowsDeleted} rows in '{WiserTableNames.WiserGrantStore}'.", LogName);await logService.LogInformation(logger, LogScopes.RunStartAndStop, LogSettings, $"Cleaned up {rowsDeleted} rows in '{WiserTableNames.WiserUsersAuthenticationTokens}'.", LogName);
+
+                if (cleanupServiceSettings.OptimizeLogsTableAfterCleanup)
+                {
+                    await databaseHelpersService.OptimizeTablesAsync(WiserTableNames.WiserGrantStore);
+                }
+            }
+            catch (Exception e)
+            {
+                await logService.LogError(logger, LogScopes.RunStartAndStop, LogSettings, $"an exception occured during cleanup: {e}", LogName);
+            }
+        }
+        
+        /// <summary>
+        /// Cleanup wiser_user_authentication_token in the database where expires is older than the set number of days.
+        /// </summary>
+        /// <param name="databaseConnection">The database connection to use.</param>
+        /// <param name="databaseHelpersService">The <see cref="IDatabaseHelpersService"/> to use.</param>
+        private async Task CleanupWiserUserAuthToken(IDatabaseConnection databaseConnection, IDatabaseHelpersService databaseHelpersService)
+        {
+            try
+            {
+                databaseConnection.SetCommandTimeout(cleanupServiceSettings.Timeout);
+                databaseConnection.AddParameter("cleanupDate", DateTime.Now.AddDays(-cleanupServiceSettings.NumberOfDaysToStoreWiserUserAuthToken));
+                
+                var query = $"DELETE FROM {WiserTableNames.WiserUsersAuthenticationTokens} WHERE expires < ?cleanupDate";
+                var rowsDeleted = await databaseConnection.ExecuteAsync(query, cleanUp: true);
+                
+                await logService.LogInformation(logger, LogScopes.RunStartAndStop, LogSettings, $"Cleaned up {rowsDeleted} rows in '{WiserTableNames.WiserUsersAuthenticationTokens}'.", LogName);
+
+                if (cleanupServiceSettings.OptimizeLogsTableAfterCleanup)
+                {
+                    await databaseHelpersService.OptimizeTablesAsync(WiserTableNames.WiserUsersAuthenticationTokens);
+                }
+            }
+            catch (Exception e)
+            {
+                await logService.LogError(logger, LogScopes.RunStartAndStop, LogSettings, $"an exception occured during cleanup: {e}", LogName);
             }
         }
     }
