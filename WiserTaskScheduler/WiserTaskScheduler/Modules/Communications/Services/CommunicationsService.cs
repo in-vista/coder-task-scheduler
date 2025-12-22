@@ -4,6 +4,7 @@ using System.Data;
 using System.Globalization;
 using System.Linq;
 using System.Net.Mail;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using DocumentFormat.OpenXml.Wordprocessing;
 using GeeksCoreLibrary.Core.DependencyInjection.Interfaces;
@@ -316,7 +317,7 @@ public class CommunicationsService : ICommunicationsService, IActionsService, IS
     }
 
     /// <summary>
-    /// Process the emails that need to be send.
+    /// Process the emails that need to be sent.
     /// </summary>
     /// <param name="communication">The communication information.</param>
     /// <param name="databaseConnection">The database connection to use.</param>
@@ -344,10 +345,14 @@ public class CommunicationsService : ICommunicationsService, IActionsService, IS
 
 	    foreach (var email in emails)
 	    {
-		    if (ShouldDelay(email) || email.AttemptCount >= communication.MaxNumberOfCommunicationAttempts)
-		    {
-			    continue;
-		    }
+			// If this email contains one or more invalid addresses, do not send this email.
+			if (!await IsValidEmailAsync(email, databaseConnection))
+			{
+				failed++;
+				continue;
+			}
+		    
+		    if (ShouldDelay(email) || email.AttemptCount >= communication.MaxNumberOfCommunicationAttempts) continue;
 
 		    string statusCode = null;
 		    string statusMessage = null;
@@ -457,6 +462,13 @@ public class CommunicationsService : ICommunicationsService, IActionsService, IS
 	    // Build bulk email request body
 	    foreach (var email in emails)
 	    {
+		    // If this email contains one or more invalid addresses, do not send this email.
+		    if (!await IsValidEmailAsync(email, databaseConnection))
+		    {
+			    failed++;			    
+			    continue;
+		    }
+		    
 		    if (ShouldDelay(email) || email.AttemptCount >= communication.MaxNumberOfCommunicationAttempts)
 		    {
 			    continue;
@@ -879,5 +891,51 @@ WHERE
 	    databaseConnection.AddParameter("is_internal_error_mail", true);
 	    await databaseConnection.InsertOrUpdateRecordBasedOnParametersAsync(WiserTableNames.WiserCommunicationGenerated, false);
 	    lastErrorSent = DateTime.Now;
+    }
+    
+    /// <summary>
+    /// If any receiver, bcc or cc address is invalid, insert or update row in wiser_communication_generated with status InvalidEmailAddress.
+    /// </summary>
+    /// <param name="email"></param>
+    /// <param name="databaseConnection"></param>
+    /// <returns></returns>
+    private async Task<bool> IsValidEmailAsync(SingleCommunicationModel email, IDatabaseConnection databaseConnection)
+    {
+	    var allInvalid = email.Receivers
+		    .Select(r => r.Address)
+		    .Concat(email.Cc)
+		    .Concat(email.Bcc)
+		    .Where(address => !IsValidEmail(address))
+		    .ToList();
+
+	    if (!allInvalid.Any()) return true;
+	    
+	    databaseConnection.ClearParameters();
+	    databaseConnection.AddParameter("last_attempt", DateTime.Now);
+	    databaseConnection.AddParameter("attempt_count", email.AttemptCount);
+	    databaseConnection.AddParameter("status_code", "InvalidEmailAddress");
+	    databaseConnection.AddParameter("status_message", $"Invalid email addresses: {string.Join(", ", allInvalid)}");
+	    
+	    await databaseConnection.InsertOrUpdateRecordBasedOnParametersAsync(
+		    WiserTableNames.WiserCommunicationGenerated, email.Id
+	    );
+	    
+	    return false;
+    }
+    
+    private bool IsValidEmail(string emailAddress)
+    {
+	    try
+	    {
+		    if (string.IsNullOrWhiteSpace(emailAddress)) return false;
+		    
+		    // Regex for checking a valid email: 1@2.3 (minimum of one character per part 1, 2, 3)
+		    var pattern = @"^[^@\s]+@[^@\s]+\.[^@\s]+$";
+		    return Regex.IsMatch(emailAddress.Trim(), pattern);
+	    }
+	    catch
+	    {
+		    return false;
+	    }
     }
 }
