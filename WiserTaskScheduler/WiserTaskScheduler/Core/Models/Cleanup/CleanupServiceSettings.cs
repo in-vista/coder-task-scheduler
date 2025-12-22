@@ -43,6 +43,16 @@ namespace WiserTaskScheduler.Core.Models.Cleanup
         /// Gets or sets the number of days wts services need to be kept.
         /// </summary>
         public int NumberOfDaysToStoreWtsServices { get; set; } = 30;
+        
+        /// <summary>
+        /// Gets or sets the number of days wiser_user_auth_tokens services need to be kept.
+        /// </summary>
+        public int NumberOfDaysToStoreWiserUserAuthToken { get; set; } = 30;
+        
+        /// <summary>
+        /// Gets or sets the number of days wiser_grant_store services need to be kept.
+        /// </summary>
+        public int NumberOfDaysToStoreWiserGrantStore { get; set; } = 30;
 		
 		/// <summary>
         /// Gets or sets the timeout value of the request
