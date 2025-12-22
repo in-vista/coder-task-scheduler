@@ -504,7 +504,6 @@ public class CommunicationsService : ICommunicationsService, IActionsService, IS
 		    }
 	    }
 	    
-	    //TODO: check waarom gaat emails.FirstOrDefault mee?
 	    await SendBulkEmailAsync(requestBody,ids, emails.FirstOrDefault(), communication, databaseConnection, gclCommunicationsService);
 	    
 	    return new JObject()
