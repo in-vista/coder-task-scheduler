@@ -893,7 +893,7 @@ WHERE
     }
     
     /// <summary>
-    /// If any receiver, bcc or cc address is invalid, insert row in wiser_communication_generated with status InvalidEmailAddress.
+    /// If any receiver, bcc or cc address is invalid, insert or update row in wiser_communication_generated with status InvalidEmailAddress.
     /// </summary>
     /// <param name="email"></param>
     /// <param name="databaseConnection"></param>
