@@ -173,7 +173,7 @@ AND TIMEDIFF(item.{(cleanupItem.SinceLastChange ? "changed_on" : "added_on")}, ?
             var affectedRows = await wiserItemsService.DeleteAsync(ids, username: "WTS Cleanup", saveHistory: cleanupItem.SaveHistory, skipPermissionsCheck: true, entityType: cleanupItem.EntityName);
             await logService.LogInformation(logger, LogScopes.RunStartAndStop, cleanupItem.LogSettings, $"Finished cleanup for items of entity '{cleanupItem.EntityName}', delete action: '{deleteAction}'.", configurationServiceName, cleanupItem.TimeId, cleanupItem.Order);
 
-            if (cleanupItem.OptimizeTablesAfterCleanup && affectedRows > 0 && (deleteAction == EntityDeletionTypes.Archive || deleteAction == EntityDeletionTypes.Permanent))
+            if (cleanupItem.OptimizeTablesAfterCleanup && affectedRows.AffectedRows > 0 && (deleteAction == EntityDeletionTypes.Archive || deleteAction == EntityDeletionTypes.Permanent))
             {
                 tablesToOptimize.Add($"{tablePrefix}{WiserTableNames.WiserItem}");
                 tablesToOptimize.Add($"{tablePrefix}{WiserTableNames.WiserItemDetail}");
