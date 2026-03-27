@@ -544,7 +544,7 @@ public class CommunicationsService : ICommunicationsService, IActionsService, IS
 		                                           ");
 		    
 	    }
-	    catch (Exception e)
+	    catch (Exception)
 	    {
 		    databaseConnection.ClearParameters();
 		    databaseConnection.AddParameter("last_attempt", DateTime.Now);

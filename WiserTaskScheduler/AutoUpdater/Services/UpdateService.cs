@@ -11,6 +11,7 @@ using Microsoft.Extensions.Options;
 
 namespace AutoUpdater.Services;
 
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]
 public class UpdateService : IUpdateService
 {
     private const string WtsTempPath = "C:/temp/wts";

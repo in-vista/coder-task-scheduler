@@ -19,6 +19,7 @@ using GeeksCoreLibrary.Modules.Communication.Interfaces;
 
 namespace WiserTaskScheduler.Modules.ServerMonitors.Services
 {
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     internal class ServerMonitorsService : IServerMonitorsService, IActionsService, IScopedService
     {
         private readonly IServiceProvider serviceProvider;

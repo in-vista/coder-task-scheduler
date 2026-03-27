@@ -127,16 +127,13 @@ namespace WiserTaskScheduler.Core.Services
                                     
                                 case OAuthGrantType.AuthCode:
                                     throw new NotImplementedException("OAuthGrantType.AuthCode is not supported yet");
-                                    break;
 
                                 case OAuthGrantType.AuthCodeWithPKCE:
                                     throw new NotImplementedException(
                                         "OAuthGrantType.AuthCodeWithPKCE is not supported yet");
-                                    break;
 
                                 case OAuthGrantType.Implicit:
                                     throw new NotImplementedException("OAuthGrantType.Implicit is not supported yet");
-                                    break;
 
                                 case OAuthGrantType.PasswordCredentials:
                                     await logService.LogInformation(logger, LogScopes.RunBody, oAuthApi.LogSettings,
@@ -225,7 +222,7 @@ namespace WiserTaskScheduler.Core.Services
                         }
 
                         // Load the certificate and create the token.
-                        var certificate = new X509Certificate2(oAuthApi.OAuthJwt.CertificateLocation, oAuthApi.OAuthJwt.CertificatePassword);
+                        X509Certificate2 certificate = X509CertificateLoader.LoadPkcs12FromFile(oAuthApi.OAuthJwt.CertificateLocation, oAuthApi.OAuthJwt.CertificatePassword);
                         jwtToken = Jose.JWT.Encode(claims, certificate.GetRSAPrivateKey(), Jose.JwsAlgorithm.RS256);
                     }
 

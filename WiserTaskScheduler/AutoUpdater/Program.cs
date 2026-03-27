@@ -37,8 +37,11 @@ IHost host = Host.CreateDefaultBuilder(args)
         services.Configure<GclSettings>(hostContext.Configuration.GetSection("Gcl"));
         services.Configure<UpdateSettings>(hostContext.Configuration.GetSection("Updater"));
         services.AddHostedService<UpdateWorker>();
-
+        
+        #pragma warning disable CA1416
         services.AddSingleton<IUpdateService, UpdateService>();
+        #pragma warning restore CA1416
+        
         services.AddScoped<IHttpContextAccessor, HttpContextAccessor>();
         services.AddGclServices(hostContext.Configuration, false, false, false);
     })

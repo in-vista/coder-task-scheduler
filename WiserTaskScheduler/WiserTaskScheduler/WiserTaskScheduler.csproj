@@ -1,13 +1,13 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Worker">
 
   <PropertyGroup>
-    <TargetFramework>net7.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <UserSecretsId>dotnet-WiserTaskScheduler-48EC2706-BD2A-44EC-8019-D81A72ED7B23</UserSecretsId>
 	<OutputType>exe</OutputType>
     <PublishSingleFile>false</PublishSingleFile>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <PlatformTarget>x64</PlatformTarget>
-    <LangVersion>default</LangVersion>
+    <LangVersion>14</LangVersion>
 	<Version>1.3.18</Version>
     <AssemblyVersion>1.3.18.0</AssemblyVersion>
 	<FileVersion>1.3.18.0</FileVersion>
