@@ -9,6 +9,7 @@ using System.Net.Http;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml.Serialization;
 using GeeksCoreLibrary.Core.DependencyInjection.Interfaces;
 using GeeksCoreLibrary.Core.Extensions;
 using GeeksCoreLibrary.Core.Models;
@@ -19,7 +20,9 @@ using Microsoft.Extensions.Options;
 using Newtonsoft.Json.Linq;
 using WiserTaskScheduler.Core.Enums;
 using WiserTaskScheduler.Core.Interfaces;
+using WiserTaskScheduler.Core.Models;
 using WiserTaskScheduler.Core.Models.OAuth;
+using WiserTaskScheduler.Modules.Wiser.Interfaces;
 
 namespace WiserTaskScheduler.Core.Services
 {
@@ -31,18 +34,24 @@ namespace WiserTaskScheduler.Core.Services
         private readonly ILogService logService;
         private readonly ILogger<OAuthService> logger;
         private readonly IServiceProvider serviceProvider;
+        private readonly IObjectsService objectsService;
+        private readonly WtsSettings wtsSettings;
+        private readonly IWiserService wiserService;
 
         private OAuthConfigurationModel configuration;
 
         // Semaphore is a locking system that can be used with async code.
         private static readonly SemaphoreSlim OauthApiLock = new(1, 1);
 
-        public OAuthService(IOptions<GclSettings> gclSettings, ILogService logService, ILogger<OAuthService> logger, IServiceProvider serviceProvider)
+        public OAuthService(IOptions<GclSettings> gclSettings, ILogService logService, ILogger<OAuthService> logger, IServiceProvider serviceProvider, IObjectsService objectsService, IOptions<WtsSettings> wtsSettings, IWiserService wiserService)
         {
             this.gclSettings = gclSettings.Value;
             this.logService = logService;
             this.logger = logger;
             this.serviceProvider = serviceProvider;
+            this.objectsService = objectsService; 
+            this.wtsSettings = wtsSettings.Value;
+            this.wiserService = wiserService;
         }
 
         /// <inheritdoc />
@@ -85,12 +94,13 @@ namespace WiserTaskScheduler.Core.Services
         }
 
         /// <inheritdoc />
-        public async Task<OAuthModel> GetAccessTokenAsync(string apiName, bool retryAfterWrongRefreshToken = true)
+        public async Task<OAuthModel> GetAccessTokenAsync(string apiName, bool retryAfterWrongRefreshToken = true, bool retryFromConfigurationAfterWrongRefreshToken = true)
         {
             var oAuthApi = configuration.OAuths.SingleOrDefault(oAuth => oAuth.ApiName.Equals(apiName));
 
             if (oAuthApi == null)
             {
+                await logService.LogWarning(logger, LogScopes.RunBody, oAuthApi.LogSettings, $"OAuth '{apiName}' not found.", LogName);
                 return null;
             }
 
@@ -314,17 +324,35 @@ namespace WiserTaskScheduler.Core.Services
 
             if (result == OAuthState.FailedLogin)
             {
+                await logService.LogWarning(logger, LogScopes.RunBody, oAuthApi.LogSettings, $"OAuth '{apiName}' failed login.", LogName);
                 return null;
             }
 
             if (result == OAuthState.FailedRefreshToken)
             {
+                var refreshTokenFromSystemObject = (await objectsService.GetSystemObjectValueAsync($"WTS_{oAuthApi.ApiName}_RefreshToken"))?.DecryptWithAes(gclSettings.DefaultEncryptionKey);
+                
                 if (!retryAfterWrongRefreshToken)
                 {
-                    return null;
+                    if (!retryFromConfigurationAfterWrongRefreshToken)
+                    {
+                        await logService.LogWarning(logger, LogScopes.RunBody, oAuthApi.LogSettings, $"OAuth '{apiName}' failed refresh token.", LogName);
+                        return null;
+                    }
+                    
+                    // Last try: Use refresh token from configuration
+                    var refreshTokenFromConfiguration = await GetRefreshTokenFromOriginalConfigurationAsync(oAuthApi.ApiName);
+                        
+                    // Log for debugging
+                    await logService.LogWarning(logger, LogScopes.RunBody, oAuthApi.LogSettings, $"OAuth '{apiName}' second retry on failed refresh token: Current refresh token: {oAuthApi.RefreshToken} - Refresh token from system object: {refreshTokenFromSystemObject} - Refresh token from configuration: {refreshTokenFromConfiguration}", LogName);
+                        
+                    oAuthApi.RefreshToken = refreshTokenFromConfiguration;
+
+                    return await GetAccessTokenAsync(apiName, false, false); 
                 }
 
                 //Retry to get the token with the login credentials if the refresh token was invalid.
+                await logService.LogWarning(logger, LogScopes.RunBody, oAuthApi.LogSettings, $"OAuth '{apiName}' first retry on failed refresh token: Current refresh token: {oAuthApi.RefreshToken} - Refresh token from system object: {refreshTokenFromSystemObject}", LogName);
                 await RequestWasUnauthorizedAsync(apiName);
                 return await GetAccessTokenAsync(apiName, false);
             }
@@ -337,6 +365,50 @@ namespace WiserTaskScheduler.Core.Services
             await SaveToDatabaseAsync(oAuthApi);
 
             return oAuthApi;
+        }
+
+        // Get the refresh token from the original configuration (used in case current refresh token is invalid)
+        private async Task<string> GetRefreshTokenFromOriginalConfigurationAsync(string apiName)
+        {
+            // start get oauth configuration
+            if (String.IsNullOrWhiteSpace(wtsSettings.MainService.LocalConfiguration))
+            {
+                var wiserConfigurations = await wiserService.RequestConfigurations();
+                foreach (var wiserConfiguration in wiserConfigurations)
+                {
+                    // Decrypt configurations if they have been encrypted.
+                    if (!String.IsNullOrWhiteSpace(wiserConfiguration.EditorValue) && !wiserConfiguration.EditorValue.StartsWith("{") && !wiserConfiguration.EditorValue.StartsWith("<"))
+                    {
+                        wiserConfiguration.EditorValue = wiserConfiguration.EditorValue.DecryptWithAes(gclSettings.DefaultEncryptionKey, useSlowerButMoreSecureMethod: true);
+                    }
+
+                    if (String.IsNullOrWhiteSpace(wiserConfiguration.EditorValue)) continue;
+
+                    wiserConfiguration.EditorValue =  ReplaceCredentials(wiserConfiguration.EditorValue);
+
+                    if (wiserConfiguration.EditorValue.StartsWith("<OAuthConfiguration>"))
+                    {
+                        if (String.IsNullOrWhiteSpace(wtsSettings.MainService.LocalOAuthConfiguration))
+                        {
+                            var serializer = new XmlSerializer(typeof(OAuthConfigurationModel));
+                            using var reader = new StringReader(wiserConfiguration.EditorValue);
+                            OAuthConfigurationModel configuration = null;
+                            configuration = (OAuthConfigurationModel)serializer.Deserialize(reader);
+
+                            if (configuration != null)
+                            {
+                                foreach (var config in configuration.OAuths)
+                                {
+                                    if (config.ApiName == apiName)
+                                        return config.RefreshToken;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            return "";
         }
 
         /// <inheritdoc />
@@ -370,6 +442,25 @@ namespace WiserTaskScheduler.Core.Services
             await objectsService.SetSystemObjectValueAsync($"WTS_{oAuthApi.ApiName}_TokenType", oAuthApi.TokenType);
             await objectsService.SetSystemObjectValueAsync($"WTS_{oAuthApi.ApiName}_RefreshToken", oAuthApi.RefreshToken.EncryptWithAes(gclSettings.DefaultEncryptionKey));
             await objectsService.SetSystemObjectValueAsync($"WTS_{oAuthApi.ApiName}_ExpireTime", oAuthApi.ExpireTime.ToString(CultureInfo.InvariantCulture));
+        }
+        
+        /// <summary>
+        /// Replaces credentials in a configuration if they are present.
+        /// </summary>
+        /// <param name="configuration">The configuration to perform the replacements on.</param>
+        /// <returns>The configuration with the credentials replaced or the original if no credentials were present.</returns>
+        private string ReplaceCredentials(string configuration)
+        {
+            // Replace credentials in configuration.
+            if (wtsSettings.Credentials != null && configuration.Contains("[{Credential:"))
+            {
+                foreach (var credential in wtsSettings.Credentials)
+                {
+                    configuration = configuration.Replace($"[{{Credential:{credential.Key}}}]", credential.Value);
+                }
+            }
+            
+            return configuration;
         }
     }
 }
