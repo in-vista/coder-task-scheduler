@@ -12,22 +12,23 @@ namespace WiserTaskScheduler.Modules.RunSchemes.Services
         /// <inheritdoc />
         public TimeSpan GetTimeTillNextRun(RunSchemeModel runScheme)
         {
-            return GetDateTimeTillNextRun(runScheme) - DateTime.Now;
+            var now = DateTime.Now;
+            return GetDateTimeTillNextRun(runScheme, now) - now;
         }
 
         /// <inheritdoc />
-        public DateTime GetDateTimeTillNextRun(RunSchemeModel runScheme)
+        public DateTime GetDateTimeTillNextRun(RunSchemeModel runScheme, DateTime referenceTime)
         {
             switch (runScheme.Type)
             {
                 case RunSchemeTypes.Continuous:
-                    return CalculateNextDelayedDateTime(runScheme);
+                    return CalculateNextDelayedDateTime(runScheme, referenceTime);
                 case RunSchemeTypes.Daily:
-                    return CalculateNextDailyDateTime(runScheme);
+                    return CalculateNextDailyDateTime(runScheme, referenceTime);
                 case RunSchemeTypes.Weekly:
-                    return CalculateNextWeeklyDateTime(runScheme);
+                    return CalculateNextWeeklyDateTime(runScheme, referenceTime);
                 case RunSchemeTypes.Monthly:
-                    return CalculateNextMonthlyDateTime(runScheme);
+                    return CalculateNextMonthlyDateTime(runScheme, referenceTime);
                 default:
                     throw new ArgumentOutOfRangeException(nameof(runScheme.Type), runScheme.Type.ToString());
             }
@@ -38,13 +39,14 @@ namespace WiserTaskScheduler.Modules.RunSchemes.Services
         /// </summary>
         /// <param name="runScheme">The run scheme to use.</param>
         /// <returns></returns>
-        private DateTime CalculateNextDelayedDateTime(RunSchemeModel runScheme)
+        private DateTime CalculateNextDelayedDateTime(RunSchemeModel runScheme, DateTime referenceTime)
         {
-            var nextDateTime = DateTime.Now.Date;
+            var nextDateTime = referenceTime.Date;
+            
             nextDateTime = HandleSkipDays(runScheme, nextDateTime);
-            nextDateTime = SetupStartStopTimes(runScheme, nextDateTime);
+            nextDateTime = SetupStartStopTimes(runScheme, nextDateTime, referenceTime);
 
-            while (nextDateTime < DateTime.Now)
+            while (nextDateTime <= referenceTime)
                 nextDateTime += runScheme.Delay;
 
             nextDateTime = ForceStartStopTimes(runScheme, nextDateTime);
@@ -58,13 +60,13 @@ namespace WiserTaskScheduler.Modules.RunSchemes.Services
         /// </summary>
         /// <param name="runScheme"></param>
         /// <returns></returns>
-        private DateTime CalculateNextDailyDateTime(RunSchemeModel runScheme)
+        private DateTime CalculateNextDailyDateTime(RunSchemeModel runScheme, DateTime referenceTime)
         {
-            var nextDateTime = DateTime.Now.Date;
+            var nextDateTime = referenceTime.Date;
 
             nextDateTime = nextDateTime.AddHours(runScheme.Hour.Hours).AddMinutes(runScheme.Hour.Minutes).AddSeconds(runScheme.Hour.Seconds);
 
-            if (nextDateTime < DateTime.Now)
+            if (nextDateTime < referenceTime)
             {
                 nextDateTime = nextDateTime.AddDays(1);
             }
@@ -79,12 +81,12 @@ namespace WiserTaskScheduler.Modules.RunSchemes.Services
         /// </summary>
         /// <param name="runScheme"></param>
         /// <returns></returns>
-        private DateTime CalculateNextWeeklyDateTime(RunSchemeModel runScheme)
+        private DateTime CalculateNextWeeklyDateTime(RunSchemeModel runScheme, DateTime referenceTime)
         {
             var nextDateTime = new DateTime(DateTime.Now.Year, DateTime.Now.Month, DateTime.Now.Day, runScheme.Hour.Hours, runScheme.Hour.Minutes, runScheme.Hour.Seconds);
             var dayOfWeek = (DayOfWeek)(runScheme.DayOfWeek % 7);
 
-            while (nextDateTime.DayOfWeek != dayOfWeek || nextDateTime < DateTime.Now)
+            while (nextDateTime.DayOfWeek != dayOfWeek || nextDateTime < referenceTime)
             {
                 nextDateTime = nextDateTime.AddDays(1);
             }
@@ -97,11 +99,11 @@ namespace WiserTaskScheduler.Modules.RunSchemes.Services
         /// </summary>
         /// <param name="runScheme"></param>
         /// <returns></returns>
-        private DateTime CalculateNextMonthlyDateTime(RunSchemeModel runScheme)
+        private DateTime CalculateNextMonthlyDateTime(RunSchemeModel runScheme, DateTime referenceTime)
         {
             var nextDateTime = new DateTime(DateTime.Now.Year, DateTime.Now.Month, Math.Min(runScheme.DayOfMonth, DateTime.DaysInMonth(DateTime.Now.Year, DateTime.Now.Month)), runScheme.Hour.Hours, runScheme.Hour.Minutes, runScheme.Hour.Seconds);
 
-            if (nextDateTime >= DateTime.Now)
+            if (nextDateTime >= referenceTime)
             {
                 return nextDateTime;
             }
@@ -144,7 +146,7 @@ namespace WiserTaskScheduler.Modules.RunSchemes.Services
         /// <param name="runScheme"></param>
         /// <param name="nextDateTime"></param>
         /// <returns></returns>
-        private DateTime SetupStartStopTimes(RunSchemeModel runScheme, DateTime nextDateTime)
+        private DateTime SetupStartStopTimes(RunSchemeModel runScheme, DateTime nextDateTime, DateTime referenceTime)
         {
             if (runScheme.StartTime == runScheme.StopTime)
             {
@@ -154,7 +156,7 @@ namespace WiserTaskScheduler.Modules.RunSchemes.Services
             nextDateTime = nextDateTime.AddSeconds(runScheme.StartTime.TotalSeconds);
                 
             // Start yesterday if the current start time has not been passed when the start time is later than the stop time.
-            if (runScheme.StartTime > runScheme.StopTime && DateTime.Now.TimeOfDay < runScheme.StartTime)
+            if (runScheme.StartTime > runScheme.StopTime && referenceTime.TimeOfDay < runScheme.StartTime)
             {
                 nextDateTime = nextDateTime.AddDays(-1);
             }

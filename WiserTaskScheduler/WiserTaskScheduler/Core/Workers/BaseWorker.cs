@@ -100,9 +100,10 @@ namespace WiserTaskScheduler.Core.Workers
                         defaultServiceIsCreated = true;
                     }
                 }
-                
-                await logService.LogInformation(logger, LogScopes.StartAndStop, RunScheme.LogSettings, $"{ConfigurationName ?? Name} started, first run on: {runSchemesService.GetDateTimeTillNextRun(RunScheme)}", ConfigurationName ?? Name, RunScheme.TimeId);
-                await wiserDashboardService.UpdateServiceAsync(ConfigurationName ?? Name, RunScheme.TimeId, nextRun: runSchemesService.GetDateTimeTillNextRun(RunScheme));
+
+                var nxtRun = runSchemesService.GetDateTimeTillNextRun(RunScheme, DateTime.Now);
+                await logService.LogInformation(logger, LogScopes.StartAndStop, RunScheme.LogSettings, $"{ConfigurationName ?? Name} started, first run on: {nxtRun}", ConfigurationName ?? Name, RunScheme.TimeId);
+                await wiserDashboardService.UpdateServiceAsync(ConfigurationName ?? Name, RunScheme.TimeId, nextRun: nxtRun);
 
                 if (!RunImmediately && !SingleRun)
                 {
@@ -171,7 +172,9 @@ namespace WiserTaskScheduler.Core.Workers
                             }
 
                             // If storing the state of this run fails, the state will stay on "running", which will prevent any future runs, so keep track of the success.
-                            updateSucceeded = await wiserDashboardService.UpdateServiceAsync(ConfigurationName ?? Name, RunScheme.TimeId, nextRun: runSchemesService.GetDateTimeTillNextRun(RunScheme), lastRun: DateTime.Now, runTime: stopWatch.Elapsed, state: state, extraRun: false);
+                            var now = DateTime.Now;
+                            var nextRun = runSchemesService.GetDateTimeTillNextRun(RunScheme, now);
+                            updateSucceeded = await wiserDashboardService.UpdateServiceAsync(ConfigurationName ?? Name, RunScheme.TimeId, nextRun: nextRun, lastRun: now, runTime: stopWatch.Elapsed, state: state, extraRun: false);
                             if (!updateSucceeded)
                             {
                                 await errorNotificationService.NotifyOfErrorByEmailAsync(serviceFailedNotificationEmails, $"Service '{ConfigurationName ?? Name}'{(RunScheme.TimeId > 0 ? $" with time ID '{RunScheme.TimeId}'" : "")} of '{wtsSettings.Name}' status save failed.", $"Wiser Task Scheduler '{wtsSettings.Name}' failed to save the service '{ConfigurationName ?? Name}'{(RunScheme.TimeId > 0 ? $" with time ID '{RunScheme.TimeId}'" : "")} state of the last run, which is '{state}', to the database. The service will continue running and the next run will attempt a new state save. Until then, the service state in the database will be incorrect.", RunScheme.LogSettings, LogScopes.RunBody, ConfigurationName ?? Name);
@@ -179,7 +182,7 @@ namespace WiserTaskScheduler.Core.Workers
                         }
                         else
                         {
-                            await wiserDashboardService.UpdateServiceAsync(ConfigurationName ?? Name, RunScheme.TimeId, nextRun: runSchemesService.GetDateTimeTillNextRun(RunScheme));
+                            await wiserDashboardService.UpdateServiceAsync(ConfigurationName ?? Name, RunScheme.TimeId, nextRun: runSchemesService.GetDateTimeTillNextRun(RunScheme, DateTime.Now));
                         }
                     }
 
@@ -189,7 +192,9 @@ namespace WiserTaskScheduler.Core.Workers
                         // If storing the result of this run failed the first time, try again now, otherwise the state will stay on running and it will never run again.
                         if (!updateSucceeded)
                         {
-                            updateSucceeded = await wiserDashboardService.UpdateServiceAsync(ConfigurationName, RunScheme.TimeId, nextRun: runSchemesService.GetDateTimeTillNextRun(RunScheme), lastRun: DateTime.Now, runTime: stopWatch.Elapsed, state: state, extraRun: false);
+                            var now = DateTime.Now;
+                            var nextRun = runSchemesService.GetDateTimeTillNextRun(RunScheme, now);
+                            updateSucceeded = await wiserDashboardService.UpdateServiceAsync(ConfigurationName, RunScheme.TimeId, nextRun: nextRun, lastRun: now, runTime: stopWatch.Elapsed, state: state, extraRun: false);
                             if (!updateSucceeded)
                             {
                                 await errorNotificationService.NotifyOfErrorByEmailAsync(serviceFailedNotificationEmails, $"Service '{ConfigurationName ?? Name}'{(RunScheme.TimeId > 0 ? $" with time ID '{RunScheme.TimeId}'" : "")} of '{wtsSettings.Name}' status save failed.", $"Wiser Task Scheduler '{wtsSettings.Name}' failed to save the service '{ConfigurationName ?? Name}'{(RunScheme.TimeId > 0 ? $" with time ID '{RunScheme.TimeId}'" : "")} state of the last run, which is '{state}', to the database a second time. Since this was a single run configuration, no more attempts will be made to correct this. The service state will now permanently be incorrect until it is manually updated.", RunScheme.LogSettings, LogScopes.RunStartAndStop, ConfigurationName ?? Name);

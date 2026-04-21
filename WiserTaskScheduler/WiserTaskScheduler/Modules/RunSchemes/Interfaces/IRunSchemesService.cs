@@ -16,7 +16,8 @@ namespace WiserTaskScheduler.Modules.RunSchemes.Interfaces
         /// Get the date and time when the worker will perform its next run.
         /// </summary>
         /// <param name="runScheme">The run scheme of the action.</param>
+        /// <param name="referenceTime">The time on which the next should be calculated.</param>
         /// <returns></returns>
-        DateTime GetDateTimeTillNextRun(RunSchemeModel runScheme);
+        DateTime GetDateTimeTillNextRun(RunSchemeModel runScheme, DateTime referenceTime);
     }
 }
