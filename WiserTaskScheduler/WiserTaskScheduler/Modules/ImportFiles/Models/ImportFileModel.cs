@@ -61,5 +61,11 @@ namespace WiserTaskScheduler.Modules.ImportFiles.Models
         /// Gets or sets the xml mappings for the file.
         /// </summary>
         public List<XmlMapModel> XmlMapping { get; set; }
+        
+        /// <summary>
+        /// Give an error when the file is missing
+        /// </summary>
+        public bool ErrorOnMissingFile { get; set; } = true;
+        
     }
 }

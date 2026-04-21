@@ -107,12 +107,22 @@ namespace WiserTaskScheduler.Modules.ImportFiles.Services
 
             if (!File.Exists(filePath) && !Directory.Exists(filePath))
             {
-                await logService.LogError(logger, LogScopes.RunStartAndStop, importFile.LogSettings, $"Failed to import file or directory '{filePath} ({importFile.FilePath})'. Path does not exists.", configurationServiceName, importFile.TimeId, importFile.Order);
+                if (importFile.ErrorOnMissingFile)
+                {
+                    await logService.LogError(logger, LogScopes.RunStartAndStop, importFile.LogSettings, $"Failed to import file or directory '{filePath} ({importFile.FilePath})'. Path does not exists.", configurationServiceName, importFile.TimeId, importFile.Order);
 
+                    return new JObject
+                    {
+                        {"Success", false}
+                    };    
+                }
+
+                await logService.LogInformation(logger, LogScopes.RunStartAndStop, importFile.LogSettings, $"Did not import file or directory '{filePath} ({importFile.FilePath})'. Path does not exists.", configurationServiceName, importFile.TimeId, importFile.Order);
+                
                 return new JObject
                 {
-                    {"Success", false}
-                };
+                    {"Success", true}
+                };   
             }
 
             try
