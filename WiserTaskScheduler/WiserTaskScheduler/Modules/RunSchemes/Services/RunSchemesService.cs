@@ -66,7 +66,7 @@ namespace WiserTaskScheduler.Modules.RunSchemes.Services
 
             nextDateTime = nextDateTime.AddHours(runScheme.Hour.Hours).AddMinutes(runScheme.Hour.Minutes).AddSeconds(runScheme.Hour.Seconds);
 
-            if (nextDateTime < referenceTime)
+            if (nextDateTime <= referenceTime)
             {
                 nextDateTime = nextDateTime.AddDays(1);
             }
@@ -86,7 +86,7 @@ namespace WiserTaskScheduler.Modules.RunSchemes.Services
             var nextDateTime = new DateTime(DateTime.Now.Year, DateTime.Now.Month, DateTime.Now.Day, runScheme.Hour.Hours, runScheme.Hour.Minutes, runScheme.Hour.Seconds);
             var dayOfWeek = (DayOfWeek)(runScheme.DayOfWeek % 7);
 
-            while (nextDateTime.DayOfWeek != dayOfWeek || nextDateTime < referenceTime)
+            while (nextDateTime.DayOfWeek != dayOfWeek || nextDateTime <= referenceTime)
             {
                 nextDateTime = nextDateTime.AddDays(1);
             }
