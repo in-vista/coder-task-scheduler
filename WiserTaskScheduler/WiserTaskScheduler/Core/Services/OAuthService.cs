@@ -34,7 +34,6 @@ namespace WiserTaskScheduler.Core.Services
         private readonly ILogService logService;
         private readonly ILogger<OAuthService> logger;
         private readonly IServiceProvider serviceProvider;
-        private readonly IObjectsService objectsService;
         private readonly WtsSettings wtsSettings;
         private readonly IWiserService wiserService;
 
@@ -43,13 +42,12 @@ namespace WiserTaskScheduler.Core.Services
         // Semaphore is a locking system that can be used with async code.
         private static readonly SemaphoreSlim OauthApiLock = new(1, 1);
 
-        public OAuthService(IOptions<GclSettings> gclSettings, ILogService logService, ILogger<OAuthService> logger, IServiceProvider serviceProvider, IObjectsService objectsService, IOptions<WtsSettings> wtsSettings, IWiserService wiserService)
+        public OAuthService(IOptions<GclSettings> gclSettings, ILogService logService, ILogger<OAuthService> logger, IServiceProvider serviceProvider, IOptions<WtsSettings> wtsSettings, IWiserService wiserService)
         {
             this.gclSettings = gclSettings.Value;
             this.logService = logService;
             this.logger = logger;
             this.serviceProvider = serviceProvider;
-            this.objectsService = objectsService; 
             this.wtsSettings = wtsSettings.Value;
             this.wiserService = wiserService;
         }
@@ -330,6 +328,8 @@ namespace WiserTaskScheduler.Core.Services
 
             if (result == OAuthState.FailedRefreshToken)
             {
+                using var scope = serviceProvider.CreateScope();
+                var objectsService = scope.ServiceProvider.GetRequiredService<IObjectsService>();
                 var refreshTokenFromSystemObject = (await objectsService.GetSystemObjectValueAsync($"WTS_{oAuthApi.ApiName}_RefreshToken"))?.DecryptWithAes(gclSettings.DefaultEncryptionKey);
                 
                 if (!retryAfterWrongRefreshToken)
