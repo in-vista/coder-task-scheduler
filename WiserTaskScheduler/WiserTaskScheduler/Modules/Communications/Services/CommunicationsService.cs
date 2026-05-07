@@ -345,13 +345,13 @@ public class CommunicationsService : ICommunicationsService, IActionsService, IS
 
 	    foreach (var email in emails)
 	    {
-			// If this email contains one or more invalid addresses, do not send this email.
-			if (!await IsValidEmailAsync(email, databaseConnection))
+			// Remove invalid email addresses
+			if (!await IsValidEmailAsync(email, databaseConnection, communication.MaxNumberOfCommunicationAttempts))
 			{
 				failed++;
 				continue;
 			}
-		    
+			
 		    if (ShouldDelay(email) || email.AttemptCount >= communication.MaxNumberOfCommunicationAttempts) continue;
 
 		    string statusCode = null;
@@ -463,7 +463,7 @@ public class CommunicationsService : ICommunicationsService, IActionsService, IS
 	    foreach (var email in emails)
 	    {
 		    // If this email contains one or more invalid addresses, do not send this email.
-		    if (!await IsValidEmailAsync(email, databaseConnection))
+		    if (!await IsValidEmailAsync(email, databaseConnection, communication.MaxNumberOfCommunicationAttempts))
 		    {
 			    failed++;			    
 			    continue;
@@ -773,12 +773,14 @@ WHERE
 		        {
 			        continue;
 		        }
-		        
+
+		        var name = names[0];
+		        if (names.Length > i) name = names[i];
 		        receiverAddresses.Add(new CommunicationReceiverModel()
 		        {
 			        Address = addresses[i],
-			        DisplayName = names[i]
-		        });
+			        DisplayName = name
+		        });    
 	        }
         }
         
@@ -892,33 +894,40 @@ WHERE
 	    await databaseConnection.InsertOrUpdateRecordBasedOnParametersAsync(WiserTableNames.WiserCommunicationGenerated, false);
 	    lastErrorSent = DateTime.Now;
     }
-    
+
     /// <summary>
-    /// If any receiver, bcc or cc address is invalid, insert or update row in wiser_communication_generated with status InvalidEmailAddress.
+    /// Remove invalid email addresses from email. If no receivers left, don't send mail and write error to database.
     /// </summary>
     /// <param name="email"></param>
     /// <param name="databaseConnection"></param>
+    /// <param name="maxAttempts"></param>
     /// <returns></returns>
-    private async Task<bool> IsValidEmailAsync(SingleCommunicationModel email, IDatabaseConnection databaseConnection)
+    private async Task<bool> IsValidEmailAsync(SingleCommunicationModel email, IDatabaseConnection databaseConnection, int maxAttempts)
     {
-	    var allInvalid = email.Receivers
-		    .Select(r => r.Address)
-		    .Concat(email.Cc)
-		    .Concat(email.Bcc)
-		    .Where(address => !IsValidEmail(address))
-		    .ToList();
-
-	    if (!allInvalid.Any()) return true;
+	    email.Receivers = email.Receivers?
+		    .Where(r => IsValidEmail(r.Address))
+		    .ToList() ?? [];
 	    
-	    databaseConnection.ClearParameters();
+	    email.Cc = email.Cc?
+		    .Where(r => IsValidEmail(r))
+		    .ToList() ?? [];
+	    
+	    email.Bcc = email.Bcc?
+		    .Where(r => IsValidEmail(r))
+		    .ToList() ?? [];
+	    
+	    if (email.Receivers.Any())
+	    {
+		    return true;
+	    }
+	    
+	    // If no valid receivers left, don't send mail and write error to database
+		databaseConnection.ClearParameters();
 	    databaseConnection.AddParameter("last_attempt", DateTime.Now);
-	    databaseConnection.AddParameter("attempt_count", email.AttemptCount);
+	    databaseConnection.AddParameter("attempt_count", maxAttempts);
 	    databaseConnection.AddParameter("status_code", "InvalidEmailAddress");
-	    databaseConnection.AddParameter("status_message", $"Invalid email addresses: {string.Join(", ", allInvalid)}");
-	    
-	    await databaseConnection.InsertOrUpdateRecordBasedOnParametersAsync(
-		    WiserTableNames.WiserCommunicationGenerated, email.Id
-	    );
+	    databaseConnection.AddParameter("status_message", "Receiver email address not valid");
+	    await databaseConnection.InsertOrUpdateRecordBasedOnParametersAsync(WiserTableNames.WiserCommunicationGenerated, email.Id);
 	    
 	    return false;
     }
