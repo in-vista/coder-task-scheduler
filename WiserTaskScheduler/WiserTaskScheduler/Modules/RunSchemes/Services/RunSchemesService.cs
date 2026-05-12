@@ -41,16 +41,20 @@ namespace WiserTaskScheduler.Modules.RunSchemes.Services
         /// <returns></returns>
         private DateTime CalculateNextDelayedDateTime(RunSchemeModel runScheme, DateTime referenceTime)
         {
+            var minimumNextRun = referenceTime.AddSeconds(1);
             var nextDateTime = referenceTime.Date;
             
             nextDateTime = HandleSkipDays(runScheme, nextDateTime);
             nextDateTime = SetupStartStopTimes(runScheme, nextDateTime, referenceTime);
 
-            while (nextDateTime <= referenceTime)
+            while (nextDateTime <= minimumNextRun)
                 nextDateTime += runScheme.Delay;
 
             nextDateTime = ForceStartStopTimes(runScheme, nextDateTime);
             nextDateTime = HandleSkipDays(runScheme, nextDateTime);
+            
+            while (nextDateTime <= minimumNextRun)
+                nextDateTime += runScheme.Delay;
 
             return nextDateTime;
         }
@@ -62,11 +66,12 @@ namespace WiserTaskScheduler.Modules.RunSchemes.Services
         /// <returns></returns>
         private DateTime CalculateNextDailyDateTime(RunSchemeModel runScheme, DateTime referenceTime)
         {
+            var minimumNextRun = referenceTime.AddSeconds(1);
             var nextDateTime = referenceTime.Date;
 
             nextDateTime = nextDateTime.AddHours(runScheme.Hour.Hours).AddMinutes(runScheme.Hour.Minutes).AddSeconds(runScheme.Hour.Seconds);
 
-            if (nextDateTime <= referenceTime)
+            if (nextDateTime <= minimumNextRun)
             {
                 nextDateTime = nextDateTime.AddDays(1);
             }
