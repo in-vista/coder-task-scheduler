@@ -285,7 +285,7 @@ namespace WiserTaskScheduler.Core.Services
 
                     if (!response.IsSuccessStatusCode)
                     {
-                        await logService.LogError(logger, LogScopes.RunBody, oAuthApi.LogSettings, $"Failed to get access token for {oAuthApi.ApiName}. Received: {response.StatusCode}\n{json}", LogName);
+                        await logService.LogError(logger, LogScopes.RunBody, oAuthApi.LogSettings, $"Failed to get access token for {oAuthApi.ApiName}. Received: {response.StatusCode}. FailState: {failState.ToString()}\n{json}", LogName);
                         result = failState;
                     }
                     else
@@ -328,6 +328,9 @@ namespace WiserTaskScheduler.Core.Services
 
             if (result == OAuthState.FailedRefreshToken)
             {
+                // Log for debugging
+                await logService.LogWarning(logger, LogScopes.RunBody, oAuthApi.LogSettings, $"OAuth '{apiName}' failed refresh token: Current refresh token: {oAuthApi.RefreshToken}", LogName);
+                
                 using var scope = serviceProvider.CreateScope();
                 var objectsService = scope.ServiceProvider.GetRequiredService<IObjectsService>();
                 var refreshTokenFromSystemObject = (await objectsService.GetSystemObjectValueAsync($"WTS_{oAuthApi.ApiName}_RefreshToken"))?.DecryptWithAes(gclSettings.DefaultEncryptionKey);
