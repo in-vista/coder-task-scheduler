@@ -479,7 +479,7 @@ public class CommunicationsService : ICommunicationsService, IActionsService, IS
 		    try
 		    { 
 			    email.AttemptCount++;
-			    requestBody.Add(await gclCommunicationsService.MakeMailerSendRequestBySingleCommunicationAsync(email, communication.SmtpSettings));
+			    requestBody.Add(await gclCommunicationsService.MakeMailerSendRequestBySingleCommunicationAsync(email, communication.SmtpSettings, true));
 			    count++;
 			    processed++;
 
