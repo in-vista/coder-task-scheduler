@@ -322,8 +322,20 @@ namespace WiserTaskScheduler.Core.Services
 
             if (result == OAuthState.FailedLogin)
             {
-                await logService.LogWarning(logger, LogScopes.RunBody, oAuthApi.LogSettings, $"OAuth '{apiName}' failed login.", LogName);
-                return null;
+                await logService.LogWarning(logger, LogScopes.RunBody, oAuthApi.LogSettings, $"OAuth '{apiName}' failed login. OAuth GrantType: {oAuthApi.GrantType.ToString()}. OAuth RefreshToken: {oAuthApi.RefreshToken}. OAuth AccessToken: {oAuthApi.AccessToken}.", LogName);
+                
+                if (!retryFromConfigurationAfterWrongRefreshToken)
+                {
+                    await logService.LogWarning(logger, LogScopes.RunBody, oAuthApi.LogSettings, $"OAuth '{apiName}' failed login after retry from configuration. OAuth GrantType: {oAuthApi.GrantType.ToString()}. OAuth RefreshToken: {oAuthApi.RefreshToken}. OAuth AccessToken: {oAuthApi.AccessToken}.", LogName);
+                    return null;
+                }
+               
+                if (oAuthApi.GrantType == OAuthGrantType.RefreshToken)
+                {
+                    oAuthApi.RefreshToken = await GetRefreshTokenFromOriginalConfigurationAsync(oAuthApi.ApiName);
+                    await logService.LogWarning(logger, LogScopes.RunBody, oAuthApi.LogSettings, $"OAuth '{apiName}' failed login, retrying with refresh token from configuration: {oAuthApi.RefreshToken}.", LogName);
+                    return await GetAccessTokenAsync(apiName, false, false);    
+                }
             }
 
             if (result == OAuthState.FailedRefreshToken)
