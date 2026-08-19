@@ -68,9 +68,16 @@ namespace WiserTaskScheduler.Core.Services
             {
                 try
                 {
-                    var files = Directory.GetFiles(folderPath);
-                    await logService.LogInformation(logger, LogScopes.RunStartAndStop, LogSettings, $"Found {files.Length} files in '{folderPath}' to perform cleanup on.", LogName);
+                    var folderSettings = cleanupServiceSettings.GetSettings(folderPath);
+                    var recursive = folderSettings?.Recursive ?? false;
+
+                    var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+
+                    var files = Directory.GetFiles(folderPath, "*", searchOption);
+
+                    await logService.LogInformation( logger, LogScopes.RunStartAndStop, LogSettings, $"Found {files.Length} files in '{folderPath}' to perform cleanup on. Recursive: {recursive}.", LogName);
                     var filesDeleted = 0;
+                    var foldersDeleted = 0;
 
                     foreach (var file in files)
                     {
@@ -90,8 +97,37 @@ namespace WiserTaskScheduler.Core.Services
                             await logService.LogError(logger, LogScopes.RunBody, LogSettings, $"Could not delete file: {file} due to exception {e}", LogName);
                         }
                     }
+                    
+                    if (recursive)
+                    {
+                        // Process the deepest folders first so their parents can
+                        // subsequently be deleted if they become empty.
+                        var directories = Directory
+                            .GetDirectories(folderPath, "*", SearchOption.AllDirectories)
+                            .OrderByDescending(directory => directory.Length);
 
-                    await logService.LogInformation(logger, LogScopes.RunStartAndStop, LogSettings, $"Cleaned up {filesDeleted} files in '{folderPath}'.", LogName);
+                        foreach (var directory in directories)
+                        {
+                            try
+                            {
+                                if (Directory.EnumerateFileSystemEntries(directory).Any())
+                                {
+                                    continue;
+                                }
+
+                                Directory.Delete(directory);
+                                foldersDeleted++;
+
+                                await logService.LogInformation(logger, LogScopes.RunBody, LogSettings, $"Deleted empty folder: {directory}", LogName);
+                            }
+                            catch (Exception e)
+                            {
+                                await logService.LogError(logger, LogScopes.RunBody, LogSettings, $"Could not delete folder: {directory} due to exception {e}", LogName);
+                            }
+                        }
+                    }
+
+                    await logService.LogInformation(logger, LogScopes.RunStartAndStop, LogSettings, $"Cleaned up {filesDeleted} files and {foldersDeleted} folders in '{folderPath}'.", LogName);
                 }
                 catch (Exception e)
                 {
