@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using WiserTaskScheduler.Core.Workers;
 using WiserTaskScheduler.Modules.RunSchemes.Enums;
 using WiserTaskScheduler.Modules.RunSchemes.Models;
@@ -10,6 +12,20 @@ namespace WiserTaskScheduler.Core.Models.Cleanup
         /// Gets or sets the paths where files are written to. If set it will delete all files in the folders that are older than <see cref="NumberOfDaysToStore"/>.
         /// </summary>
         public string[] FileFolderPaths { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the optional cleanup settings for each folder path, keyed by folder path using case-insensitive matching.
+        /// </summary>
+        public FileFolderPathSettings[] FileFolderPathSettings { get; set; } = [];
+
+        public FileFolderPathSettings? GetSettings(string folderPath)
+        {
+            return FileFolderPathSettings.FirstOrDefault(settings =>
+                string.Equals(
+                    settings.FolderPath.TrimEnd('/', '\\'),
+                    folderPath.TrimEnd('/', '\\'),
+                    StringComparison.OrdinalIgnoreCase));
+        }
 
         /// <summary>
         /// Gets or sets the number of days logs need to be kept.
@@ -59,5 +75,12 @@ namespace WiserTaskScheduler.Core.Models.Cleanup
         /// value is in seconds
         /// </summary>
         public int Timeout { get; set; } = 300;
+    }
+    
+    public class FileFolderPathSettings
+    {
+        public string FolderPath { get; set; } = string.Empty;
+
+        public bool Recursive { get; set; }
     }
 }
