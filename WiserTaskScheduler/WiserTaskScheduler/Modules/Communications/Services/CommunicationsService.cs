@@ -479,7 +479,7 @@ public class CommunicationsService : ICommunicationsService, IActionsService, IS
 		    try
 		    { 
 			    email.AttemptCount++;
-			    requestBody.Add(await gclCommunicationsService.MakeMailerSendRequestBySingleCommunicationAsync(email, communication.SmtpSettings));
+			    requestBody.Add(await gclCommunicationsService.MakeMailerSendRequestBySingleCommunicationAsync(email, communication.SmtpSettings, true));
 			    count++;
 			    processed++;
 
@@ -805,11 +805,23 @@ WHERE
 	        attachmentUrls.AddRange(rawAttachmentUrls.Split(new[] {',', ';'}, StringSplitOptions.RemoveEmptyEntries));
         }
 
-        var wiserItemFiles = new List<ulong>();
+        var wiserItemFiles = new List<(string EntityType, ulong FileId)>();
         var rawWiserItemFiles = row.Field<string>("wiser_item_files");
         if (!String.IsNullOrWhiteSpace(rawWiserItemFiles))
         {
-	        wiserItemFiles.AddRange(rawWiserItemFiles.Split(new[] {',', ';'}, StringSplitOptions.RemoveEmptyEntries).Select(UInt64.Parse).ToList());
+	        foreach (var file in rawWiserItemFiles.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries))
+	        {
+		        if (file.Contains('_'))
+		        {
+			        // Entity given to pick correct table when getting files
+			        wiserItemFiles.Add((file.Split('_')[0], Convert.ToUInt64(file.Split('_')[1])));
+		        }
+		        else
+		        {
+			        // Only file id given
+			        wiserItemFiles.Add(("", Convert.ToUInt64(file)));
+		        }
+	        }
         }
 
         List<string> tags = null;
@@ -834,7 +846,7 @@ WHERE
 	        UploadedFile = row.Field<byte[]>("uploaded_file"),
 	        UploadedFileName = row.Field<string>("uploaded_filename"),
 	        AttachmentUrls = attachmentUrls,
-	        WiserItemFiles = wiserItemFiles,
+	        WiserItemFilesWithEntity = wiserItemFiles,
 	        Type = Enum.Parse<CommunicationTypes>(row.Field<string>("communicationtype"), true),
 	        SendDate = row.Field<DateTime>("send_date"),
 	        AttemptCount = row.Field<int>("attempt_count"),
