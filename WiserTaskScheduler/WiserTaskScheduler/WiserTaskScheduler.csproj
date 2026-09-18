@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Worker">
 
   <PropertyGroup>
-    <TargetFramework>net7.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <UserSecretsId>dotnet-WiserTaskScheduler-48EC2706-BD2A-44EC-8019-D81A72ED7B23</UserSecretsId>
 	<OutputType>exe</OutputType>
     <PublishSingleFile>false</PublishSingleFile>
