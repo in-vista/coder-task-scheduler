@@ -48,4 +48,10 @@ public class CommunicationModel : ActionModel
     /// Gets or sets the settings for SMS if the <see cref="Type"/> is SMS.
     /// </summary>
     public SmsSettings SmsSettings { get; set; }
+    
+    /// <summary>
+    /// Gets or sets if communication should be generated from wiser_communication to wiser_communication_generated.
+    /// </summary>
+    public bool GenerateCommunication { get; set; } = false;
+
 }

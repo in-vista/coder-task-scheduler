@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Worker">
 
     <PropertyGroup>
-        <TargetFramework>net7.0</TargetFramework>
+        <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <UserSecretsId>dotnet-AutoUpdater-E9117816-DA98-4D43-9E8B-FDE0D48F866C</UserSecretsId>
 		<OutputType>exe</OutputType>

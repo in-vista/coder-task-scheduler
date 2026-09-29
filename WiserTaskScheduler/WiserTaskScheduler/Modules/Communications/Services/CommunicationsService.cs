@@ -72,7 +72,8 @@ public class CommunicationsService : ICommunicationsService, IActionsService, IS
 	    var dataSelectorsService = scope.ServiceProvider.GetRequiredService<IDataSelectorsService>();
 	    var stringReplacementsService = scope.ServiceProvider.GetRequiredService<IStringReplacementsService>();
 	    
-	    await GenerateCommunicationsAsync(communication, databaseConnection, gclCommunicationsService, dataSelectorsService, stringReplacementsService, configurationServiceName);
+	    if (communication.GenerateCommunication)
+			await GenerateCommunicationsAsync(communication, databaseConnection, gclCommunicationsService, dataSelectorsService, stringReplacementsService, configurationServiceName);
 	    
 	    switch (communication.Type)
 	    {
