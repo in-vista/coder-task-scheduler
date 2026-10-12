@@ -18,6 +18,7 @@ using WiserTaskScheduler.Core.Enums;
 using WiserTaskScheduler.Core.Interfaces;
 using WiserTaskScheduler.Core.Models;
 using WiserTaskScheduler.Modules.Wiser.Interfaces;
+using HttpMethod = System.Net.Http.HttpMethod;
 
 namespace WiserTaskScheduler.Modules.Wiser.Services;
 
