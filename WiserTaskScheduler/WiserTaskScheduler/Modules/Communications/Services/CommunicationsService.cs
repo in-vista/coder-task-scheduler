@@ -939,7 +939,7 @@ WHERE
 	    databaseConnection.AddParameter("last_attempt", DateTime.Now);
 	    databaseConnection.AddParameter("attempt_count", maxAttempts);
 	    databaseConnection.AddParameter("status_code", "InvalidEmailAddress");
-	    databaseConnection.AddParameter("status_message", "Receiver email address not valid");
+	    databaseConnection.AddParameter("status_message", $"Receiver email address not valid, CTS has set attempt_count to {maxAttempts}");
 	    await databaseConnection.InsertOrUpdateRecordBasedOnParametersAsync(WiserTableNames.WiserCommunicationGenerated, email.Id);
 	    
 	    return false;
