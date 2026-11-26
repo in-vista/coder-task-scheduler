@@ -4,6 +4,7 @@ using System.Data;
 using System.Globalization;
 using System.Linq;
 using System.Net.Mail;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using DocumentFormat.OpenXml.Wordprocessing;
@@ -81,6 +82,7 @@ public class CommunicationsService : ICommunicationsService, IActionsService, IS
 		        if (communication.BulkSend && communication.SmtpSettings.Provider == EmailServiceProviders.MailerSendRestApi)
 		        {
 			        // Only bulk send if provider is MailerSend. Other providers don't support bulk sending.
+			        await GetBulkMailMessageIdsAsync(communication, databaseConnection, gclCommunicationsService, configurationServiceName);
 			        return await ProcessBulkMailsAsync(communication, databaseConnection, gclCommunicationsService, configurationServiceName);
 		        }
 		        else
@@ -367,6 +369,7 @@ public class CommunicationsService : ICommunicationsService, IActionsService, IS
 			    processed++;
 			    databaseConnection.ClearParameters();
 			    databaseConnection.AddParameter("processed_date", DateTime.Now);
+			    statusCode = email.StatusCode;
 			    statusMessage = email.StatusMessage;
 		    }
 		    catch (SmtpException smtpException)
@@ -413,6 +416,10 @@ public class CommunicationsService : ICommunicationsService, IActionsService, IS
 		    databaseConnection.AddParameter("attempt_count", email.AttemptCount);
 			databaseConnection.AddParameter("status_code", statusCode);
 			databaseConnection.AddParameter("status_message", statusMessage);
+			if (!string.IsNullOrEmpty(email.Provider))
+				databaseConnection.AddParameter("provider", email.Provider);
+			if (!string.IsNullOrEmpty(email.ProviderMessageId))
+				databaseConnection.AddParameter("provider_message_id", email.ProviderMessageId);
 		    await databaseConnection.InsertOrUpdateRecordBasedOnParametersAsync(WiserTableNames.WiserCommunicationGenerated, email.Id);
 
 		    if (sendErrorNotification)
@@ -516,6 +523,106 @@ public class CommunicationsService : ICommunicationsService, IActionsService, IS
 		    {"Total", processed + failed}
 	    };
     }
+    
+    /// <summary>
+    /// Get bulk send messsage ID's
+    /// </summary>
+    /// <param name="communication">The communication model for connecting to API.</param>
+    /// <param name="databaseConnection">The database connection to use.</param>
+    /// <param name="iclCommunicationsService">The communication service of the ICL.</param>
+    /// <param name="configurationServiceName">The name of the configuration that is being executed.</param>
+    /// <returns></returns>
+   private async Task<bool> GetBulkMailMessageIdsAsync(CommunicationModel communication, IDatabaseConnection databaseConnection, IGclCommunicationsService iclCommunicationsService, string configurationServiceName)
+	{
+	    var emails = await GetBulkCommunicationsWithoutMessageId(databaseConnection);
+
+	    if (emails.Count == 0)
+	        return true;
+
+	    try
+	    {
+	        // Group emails by bulk ID, preserving their original order.
+	        var bulkGroups = emails.ToLookup(email => ExtractBulkId(email.Value));
+
+	        foreach (var bulkGroup in bulkGroups)
+	        {
+	            var bulkId = bulkGroup.Key;
+
+	            if (string.IsNullOrWhiteSpace(bulkId))
+	                continue;
+
+	            var bulkEmails = bulkGroup.ToList();
+
+	            // Get bulk status from MailerSend.
+	            var result = await iclCommunicationsService.GetMailerSendBulkStatus(bulkId, communication.SmtpSettings);
+
+	            if (string.IsNullOrWhiteSpace(result))
+	                continue;
+
+	            using var json = JsonDocument.Parse(result);
+
+	            if (!json.RootElement.TryGetProperty("data", out var data) ||
+	                data.ValueKind != JsonValueKind.Object ||
+	                !data.TryGetProperty("state", out var state) ||
+	                state.ValueKind != JsonValueKind.String ||
+	                state.GetString() != "completed" ||
+	                !data.TryGetProperty("messages_id", out var messages) ||
+	                messages.ValueKind != JsonValueKind.Array)
+	            {
+	                continue;
+	            }
+
+	            // Verify that the number of messages matches the batch.
+	            if (messages.GetArrayLength() != bulkEmails.Count)
+	            {
+	                await logService.LogError(logger, LogScopes.RunBody, communication.LogSettings, $"Bulk {bulkId}: expected {bulkEmails.Count} messages, received {messages.GetArrayLength()}.", configurationServiceName, communication.TimeId, communication.Order);
+	                continue;
+	            }
+
+	            // Match message IDs to emails by their position.
+	            for (var i = 0; i < bulkEmails.Count; i++)
+	            {
+	                var message = messages[i];
+
+	                if (message.ValueKind != JsonValueKind.String)
+	                    continue;
+
+	                var messageId = message.GetString();
+
+	                if (string.IsNullOrWhiteSpace(messageId))
+	                    continue;
+
+	                var email = bulkEmails[i];
+
+	                // Add message ID to database.
+	                databaseConnection.ClearParameters();
+	                databaseConnection.AddParameter("provider_message_id", messageId);
+	                await databaseConnection.InsertOrUpdateRecordBasedOnParametersAsync(WiserTableNames.WiserCommunicationGenerated, email.Key);
+	            }
+	        }
+	    }
+	    catch (Exception e)
+	    {
+	        await logService.LogError(logger, LogScopes.RunBody, communication.LogSettings, $"Get message id's of bulk sending error: {e}", configurationServiceName, communication.TimeId, communication.Order);
+	    }
+
+	    return true;
+	}
+    
+	private static string ExtractBulkId(string? value)
+	{
+		if (string.IsNullOrWhiteSpace(value))
+			return string.Empty;
+
+		using var json = JsonDocument.Parse(value);
+
+		if (json.RootElement.ValueKind == JsonValueKind.Object && json.RootElement.TryGetProperty("bulk_email_id", out var property) && property.ValueKind == JsonValueKind.String)
+		{
+			return property.GetString() ?? string.Empty;
+		}
+
+		return string.Empty;
+	}
 
     private async Task SendBulkEmailAsync(List<MailerSendRequestModel> requestBody, List<int> ids, SingleCommunicationModel firstEmail, CommunicationModel communication, IDatabaseConnection databaseConnection, IGclCommunicationsService gclCommunicationsService)
     {
@@ -525,22 +632,30 @@ public class CommunicationsService : ICommunicationsService, IActionsService, IS
 	    }
 	    
 	    var statusMessage = "";
+	    var statusCode = "";
 	    
 	    // Send bulk email
 	    try
 	    {
-		    statusMessage = await gclCommunicationsService.SendRequestToMailerSendApiAsync(requestBody, communication.SmtpSettings);
+		    var emptyModelForStatus = new SingleCommunicationModel();
+		    await gclCommunicationsService.SendRequestToMailerSendApiAsync(emptyModelForStatus, requestBody, communication.SmtpSettings);
+		    statusMessage = emptyModelForStatus.StatusMessage;
+		    statusCode = emptyModelForStatus.StatusCode;
 
 		    databaseConnection.ClearParameters();
 		    databaseConnection.AddParameter("last_attempt", DateTime.Now);
 		    databaseConnection.AddParameter("processed_date", DateTime.Now);
 		    databaseConnection.AddParameter("status_message", statusMessage);
+		    databaseConnection.AddParameter("status_code", statusCode);
+
 		    await databaseConnection.ExecuteAsync($@"
 													UPDATE {WiserTableNames.WiserCommunicationGenerated}
 			                                        SET attempt_count=attempt_count+1,
 														last_attempt=?last_attempt,
 			                                            processed_date=?processed_date,
-			                                           	status_message=?status_message
+			                                           	status_message=?status_message,
+			                                        	provider='mailersend',
+			                                        	status_code=?status_code
 			                                        WHERE id IN ({string.Join(",", ids)});
 		                                           ");
 		    
@@ -550,11 +665,14 @@ public class CommunicationsService : ICommunicationsService, IActionsService, IS
 		    databaseConnection.ClearParameters();
 		    databaseConnection.AddParameter("last_attempt", DateTime.Now);
 		    databaseConnection.AddParameter("status_message", statusMessage);
+		    databaseConnection.AddParameter("status_code", statusCode);
 		    await databaseConnection.ExecuteAsync($@"
 			                                        UPDATE {WiserTableNames.WiserCommunicationGenerated}
 			                                        SET attempt_count=attempt_count+1,
 			                                            last_attempt=?last_attempt,
-			                                           	status_message=?status_message
+			                                           	status_message=?status_message,
+			                                        	provider='mailersend',
+			                                        	status_code=?status_code
 			                                        WHERE id IN ({string.Join(",", ids)});
 		                                           ");
 		    await SendErrorNotification(communication, databaseConnection, firstEmail, statusMessage);
@@ -734,7 +852,8 @@ WHERE
 	AND processed_date IS NULL
 	AND IFNULL(max_send_date,'2099-12-31') >= ?now	
 	AND attempt_count < ?maxNumberOfCommunicationAttempts
-	AND send_as_bulk = ?sendAsBulk");
+	AND send_as_bulk = ?sendAsBulk
+	{(communication.BulkSend ? "ORDER BY id" : "")}");
 
         var communications = new List<SingleCommunicationModel>();
         
@@ -752,7 +871,38 @@ WHERE
 
         return communications;
     }
+    
+    /// <summary>
+    /// Get communications that are bulk and have no message id yet.
+    /// </summary>
+    /// <param name="databaseConnection">The database connection to use.</param>
+    /// <returns></returns>
+    private async Task<SortedList<int, string>> GetBulkCommunicationsWithoutMessageId(IDatabaseConnection databaseConnection)
+    {
+        var output = new SortedList<int, string>();
+	    var dataTable = await databaseConnection.GetAsync($@"
+							SELECT
+								id,
+								status_message									
+							FROM {WiserTableNames.WiserCommunicationGenerated}
+							WHERE
+								communicationtype = 'email'
+								AND provider_message_id IS NULL							  	
+							  	AND status_message LIKE '%bulk_email_id%'
+								AND send_as_bulk = 1
+								AND provider = 'mailersend'
+							  	AND processed_date IS NOT NULL
+								AND processed_date>DATE_SUB(NOW(), INTERVAL 1 WEEK)
+							ORDER BY id");
 
+        foreach (DataRow row in dataTable.Rows)
+        {
+			output.Add(row.Field<int>("id"), row.Field<string>("status_message"));
+        }
+
+        return output;
+    }
+    
     /// <summary>
     /// Get the model of a single communication from a row in the database.
     /// </summary>
