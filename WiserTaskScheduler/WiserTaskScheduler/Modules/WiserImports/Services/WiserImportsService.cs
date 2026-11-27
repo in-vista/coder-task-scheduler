@@ -110,12 +110,21 @@ public class WiserImportsService : IWiserImportsService, IActionsService, IScope
             var itemParentIdsToKeep = new Dictionary<int, Dictionary<ulong, List<ulong>>>();
             var sourceLinksToKeep = new Dictionary<int, Dictionary<ulong, List<ulong>>>();
 
+            // The IDs of the new items that other rows in this import link to, by their import key.
+            Dictionary<string, ulong> savedImportKeys = new();
+
             var importData = JsonConvert.DeserializeObject<List<ImportDataModel>>(importRow.RawData, serializerSettings);
             foreach (var import in importData)
             {
+                await ResolveImportKeysAsync(wiserImport, import, savedImportKeys, errors, configurationServiceName);
+
                 try
                 {
                     import.Item = await wiserItemsService.SaveAsync(import.Item, import.Item.ParentItemId, username: usernameForLogs, userId: importRow.UserId);
+                    if (!string.IsNullOrWhiteSpace(import.ImportKey))
+                    {
+                        savedImportKeys[import.ImportKey] = import.Item.Id;
+                    }
                 }
                 catch (Exception e)
                 {
@@ -237,6 +246,40 @@ WHERE server_name = ?serverName
 AND started_on IS NULL
 AND start_on <= ?now
 ORDER BY added_on ASC");
+    }
+
+    /// <summary>
+    /// Sets the destination of the links that refer to a new item from the same import via <see cref="ItemLinkImportModel.DestinationImportKey"/>,
+    /// to the ID that item got when it was saved. For links that use the parent_item_id, the item is placed under that item.
+    /// Links to an item that wasn't saved (for example because it failed) are removed from the import and added to the errors.
+    /// </summary>
+    /// <param name="wiserImport">The WTS information for handling the imports.</param>
+    /// <param name="import">The data to import.</param>
+    /// <param name="savedImportKeys">The IDs of the items that were saved in this import, by their import key.</param>
+    /// <param name="errors">The list of errors.</param>
+    /// <param name="configurationServiceName">The name of the configuration the import is executed within.</param>
+    private async Task ResolveImportKeysAsync(WiserImportModel wiserImport, ImportDataModel import, Dictionary<string, ulong> savedImportKeys, List<string> errors, string configurationServiceName)
+    {
+        List<ItemLinkImportModel> unresolvedLinks = [];
+        foreach (ItemLinkImportModel link in import.Links.Where(link => !string.IsNullOrWhiteSpace(link.DestinationImportKey)))
+        {
+            if (!savedImportKeys.TryGetValue(link.DestinationImportKey, out ulong destinationItemId))
+            {
+                string error = $"Can't link item '{import.Item.Title}' to the item with import key '{link.DestinationImportKey}', because that item hasn't been imported.";
+                await logService.LogError(logger, LogScopes.RunBody, wiserImport.LogSettings, error, configurationServiceName, wiserImport.TimeId, wiserImport.Order);
+                errors.Add(error);
+                unresolvedLinks.Add(link);
+                continue;
+            }
+
+            link.DestinationItemId = destinationItemId;
+            if (link.UseParentItemId)
+            {
+                import.Item.ParentItemId = destinationItemId;
+            }
+        }
+
+        import.Links.RemoveAll(unresolvedLinks.Contains);
     }
 
     /// <summary>
